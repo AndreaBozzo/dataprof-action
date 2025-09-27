@@ -117,21 +117,27 @@ runs:
 
         echo "Installing dataprof v${VERSION} via cargo..."
         if [[ "$VERSION" == "0.4.6" ]]; then
-          cargo install dataprof --version "^0.4.6" --features minimal --locked || {
+          cargo install dataprof --version "=0.4.6" --features minimal --locked || {
             echo "Failed to install specific version, trying without lock..."
-            cargo install dataprof --version "^0.4.6" --features minimal
+            cargo install dataprof --version "=0.4.6" --features minimal || {
+              echo "Failed to install 0.4.6, trying latest..."
+              cargo install dataprof --features minimal
+            }
           }
         else
-          cargo install dataprof --version "^${VERSION}" --features minimal --locked || {
+          cargo install dataprof --version "=${VERSION}" --features minimal --locked || {
             echo "Failed to install specific version, trying without lock..."
-            cargo install dataprof --version "^${VERSION}" --features minimal
+            cargo install dataprof --version "=${VERSION}" --features minimal || {
+              echo "Failed to install ${VERSION}, trying latest..."
+              cargo install dataprof --features minimal
+            }
           }
         fi
 
         # Verify installation
         if command -v dataprof-cli &> /dev/null; then
           echo "dataprof-cli installed successfully"
-          dataprof-cli --version
+          dataprof-cli --help | head -5 || echo "Help not available"
         else
           echo "ERROR: dataprof setup failed"
           exit 1
