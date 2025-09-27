@@ -121,8 +121,9 @@ runs:
 
       # Determine version to install
       VERSION="${{ inputs.dataprof-version }}"
-      if [[ "$VERSION" == "latest" ]]; then
-        VERSION="0.4.6"
+      if [[ "$VERSION" == "latest" ]] || [[ -z "$VERSION" ]]; then
+        # Query crates.io API for latest version
+        VERSION=$(curl -s https://crates.io/api/v1/crates/dataprof | jq -r '.crate.max_version')
       fi
 
       echo "::notice::Installing dataprof version: $VERSION"
