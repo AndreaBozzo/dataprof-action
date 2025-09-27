@@ -1,5 +1,5 @@
 name: 'DataProf ML Readiness Assessment'
-description: 'Analyze CSV files for ML readiness with dataprof. Data engineering, data science, machine learning, data quality profiling and quality gates for CI/CD workflows.'
+description: 'Analyze CSV files for ML readiness with dataprof. Data quality profiling and quality gates for CI/CD workflows.'
 author: 'Andrea Bozzo'
 
 branding:
