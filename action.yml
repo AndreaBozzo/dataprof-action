@@ -102,22 +102,36 @@ runs:
       run: |
         echo "Setting up dataprof..."
 
-        # Install via cargo for now (binary downloads to be implemented later)
+        # Determine version to install
+        VERSION="${{ inputs.dataprof-version }}"
+        if [[ "$VERSION" == "latest" ]]; then
+          VERSION="0.4.6"  # Use actual latest version
+        fi
+
+        # Install Rust/Cargo if needed
         if ! command -v cargo &> /dev/null; then
           echo "Installing Rust and Cargo..."
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
           source "$HOME/.cargo/env"
         fi
 
-        echo "Installing dataprof via cargo..."
-        cargo install dataprof --features minimal --locked || {
-          echo "Failed to install specific version, trying latest..."
-          cargo install dataprof --features minimal
-        }
+        echo "Installing dataprof v${VERSION} via cargo..."
+        if [[ "$VERSION" == "0.4.6" ]]; then
+          cargo install dataprof --version "^0.4.6" --features minimal --locked || {
+            echo "Failed to install specific version, trying without lock..."
+            cargo install dataprof --version "^0.4.6" --features minimal
+          }
+        else
+          cargo install dataprof --version "^${VERSION}" --features minimal --locked || {
+            echo "Failed to install specific version, trying without lock..."
+            cargo install dataprof --version "^${VERSION}" --features minimal
+          }
+        fi
 
         # Verify installation
         if command -v dataprof-cli &> /dev/null; then
-          echo "dataprof-cli is ready"
+          echo "dataprof-cli installed successfully"
+          dataprof-cli --version
         else
           echo "ERROR: dataprof setup failed"
           exit 1
