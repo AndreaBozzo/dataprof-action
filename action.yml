@@ -72,365 +72,339 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Validate inputs
-      shell: bash
-      run: |
-        set -euo pipefail
+  - name: Validate inputs
+    shell: bash
+    run: |
+      set -euo pipefail
 
-        echo "::group::Validating inputs"
+      echo "::group::Validating inputs"
 
-        # Validate file existence and readability
-        if [[ ! -f "${{ inputs.file }}" ]]; then
-          echo "::error file=${{ inputs.file }}::File not found"
-          exit 1
-        fi
+      # Validate file existence and readability
+      if [[ ! -f "${{ inputs.file }}" ]]; then
+        echo "::error file=${{ inputs.file }}::File not found"
+        exit 1
+      fi
 
-        if [[ ! -r "${{ inputs.file }}" ]]; then
-          echo "::error file=${{ inputs.file }}::File is not readable"
-          exit 1
-        fi
+      if [[ ! -r "${{ inputs.file }}" ]]; then
+        echo "::error file=${{ inputs.file }}::File is not readable"
+        exit 1
+      fi
 
-        # Validate threshold is numeric and in range
-        threshold="${{ inputs.ml-threshold }}"
-        if ! [[ "$threshold" =~ ^[0-9]+$ ]] || [[ "$threshold" -lt 0 ]] || [[ "$threshold" -gt 100 ]]; then
-          echo "::error::ml-threshold must be a number between 0 and 100, got: $threshold"
-          exit 1
-        fi
+      # Validate threshold is numeric and in range
+      threshold="${{ inputs.ml-threshold }}"
+      if ! [[ "$threshold" =~ ^[0-9]+$ ]] || [[ "$threshold" -lt 0 ]] || [[ "$threshold" -gt 100 ]]; then
+        echo "::error::ml-threshold must be a number between 0 and 100, got: $threshold"
+        exit 1
+      fi
 
-        # Validate output format
-        format="${{ inputs.output-format }}"
-        if [[ ! "$format" =~ ^(json|csv|text)$ ]]; then
-          echo "::error::output-format must be one of: json, csv, text. Got: $format"
-          exit 1
-        fi
+      # Validate output format
+      format="${{ inputs.output-format }}"
+      if [[ ! "$format" =~ ^(json|csv|text)$ ]]; then
+        echo "::error::output-format must be one of: json, csv, text. Got: $format"
+        exit 1
+      fi
 
-        # Check file extension (warning only)
-        if [[ ! "${{ inputs.file }}" =~ \.(csv|CSV)$ ]]; then
-          echo "::warning file=${{ inputs.file }}::File does not have .csv extension, proceeding anyway"
-        fi
+      # Check file extension (warning only)
+      if [[ ! "${{ inputs.file }}" =~ \.(csv|CSV)$ ]]; then
+        echo "::warning file=${{ inputs.file }}::File does not have .csv extension, proceeding anyway"
+      fi
 
-        echo "✓ Input validation passed"
+      echo "Input validation passed"
+      echo "::endgroup::"
+
+  - name: Setup dataprof
+    shell: bash
+    run: |
+      set -euo pipefail
+
+      echo "::group::Setting up dataprof"
+
+      # Determine version to install
+      VERSION="${{ inputs.dataprof-version }}"
+      if [[ "$VERSION" == "latest" ]]; then
+        VERSION="0.4.6"
+      fi
+
+      echo "::notice::Installing dataprof version: $VERSION"
+
+      # Setup Rust environment if needed
+      if ! command -v cargo &> /dev/null; then
+        echo "::group::Installing Rust toolchain"
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --quiet
+        echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+        source "$HOME/.cargo/env"
         echo "::endgroup::"
+      fi
 
-    - name: Setup dataprof
-      shell: bash
-      run: |
-        set -euo pipefail
+      # Install dataprof with proper error handling
+      echo "::group::Installing dataprof via cargo"
 
-        echo "::group::Setting up dataprof"
-
-        # Determine version to install
-        VERSION="${{ inputs.dataprof-version }}"
-        if [[ "$VERSION" == "latest" ]]; then
-          VERSION="0.4.6"
-        fi
-
-        echo "::notice::Installing dataprof version: $VERSION"
-
-        # Setup Rust environment if needed
-        if ! command -v cargo &> /dev/null; then
-          echo "::group::Installing Rust toolchain"
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --quiet
-          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
-          source "$HOME/.cargo/env"
-          echo "::endgroup::"
-        fi
-
-        # Install dataprof with proper error handling
-        echo "::group::Installing dataprof via cargo"
-
-        install_dataprof() {
-          local version_spec="$1"
-          local features="$2"
-          local locked="$3"
-
-          local cmd="cargo install dataprof --version '$version_spec' --features '$features'"
-          if [[ "$locked" == "true" ]]; then
-            cmd="$cmd --locked"
-          fi
-
-          echo "Running: $cmd"
-          eval "$cmd" 2>&1
-        }
-
-        # Try installation with fallback strategy
-        if ! install_dataprof "=$VERSION" "minimal" "true"; then
-          echo "::warning::Failed to install with lockfile, retrying without..."
-          if ! install_dataprof "=$VERSION" "minimal" "false"; then
-            echo "::warning::Failed to install specific version, trying latest..."
-            if ! install_dataprof "*" "minimal" "false"; then
-              echo "::error::All installation attempts failed"
-              exit 1
-            fi
-          fi
-        fi
-
-        echo "::endgroup::"
-
-        # Verify installation and add to PATH
-        if command -v dataprof-cli &> /dev/null; then
-          echo "✓ dataprof-cli installed successfully"
-          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
-        else
-          echo "::error::dataprof-cli installation verification failed"
-          exit 1
-        fi
-
-        echo "::endgroup::"
-
-    - name: Run ML readiness analysis
-      id: ml-analysis
-      shell: bash
-      run: |
-        set -euo pipefail
-
-        echo "::group::Running ML readiness analysis"
-
-        # Setup temporary workspace with cleanup trap
-        temp_dir=$(mktemp -d)
-        output_file="$temp_dir/ml_analysis.${{ inputs.output-format }}"
-
-        cleanup() {
-          [[ -d "$temp_dir" ]] && rm -rf "$temp_dir"
-        }
-        trap cleanup EXIT
-
-        # Build command array
-        cmd_args=(
-          "${{ inputs.file }}"
-          "--quality"
-          "--ml-score"
-          "--format" "${{ inputs.output-format }}"
-        )
-
-        if [[ "${{ inputs.generate-code }}" == "true" ]]; then
-          cmd_args+=("--ml-code")
-        fi
-
-        # Execute analysis with proper error handling
-        echo "::notice::Executing: dataprof-cli ${cmd_args[*]}"
-
-        if ! dataprof-cli "${cmd_args[@]}" > "$output_file" 2>&1; then
-          exit_code=$?
-          echo "::error::Analysis failed with exit code $exit_code"
-          echo "::group::Error output"
-          cat "$output_file" 2>/dev/null || echo "No output available"
-          echo "::endgroup::"
-          exit $exit_code
-        fi
-
-        echo "✓ Analysis completed successfully"
-        echo "::endgroup::"
-
-        echo "::group::Parsing analysis results"
-
-        # Define functions for parsing
-        parse_json_results() {
-          local file="$1"
-
-          # Ensure jq is available (GitHub runners have it pre-installed)
-          if ! command -v jq &> /dev/null; then
-            echo "::error::jq is required for JSON parsing but not available"
-            return 1
-          fi
-
-          # Validate JSON format
-          if ! jq empty "$file" 2>/dev/null; then
-            echo "::error::Invalid JSON format in output file"
-            return 1
-          fi
-
-          # Extract metrics with proper error handling
-          ml_score=$(jq -r '.summary.ml_readiness.score // "0"' "$file" 2>/dev/null || echo "0")
-          readiness_level=$(jq -r '.summary.ml_readiness.level // "UNKNOWN"' "$file" 2>/dev/null || echo "UNKNOWN")
-          completeness=$(jq -r '.summary.completeness_score // "0"' "$file" 2>/dev/null || echo "0")
-          consistency=$(jq -r '.summary.consistency_score // "0"' "$file" 2>/dev/null || echo "0")
-          rec_count=$(jq -r '.summary.ml_readiness.recommendations // [] | length' "$file" 2>/dev/null || echo "0")
-          recommendations=$(jq -c '.summary.ml_readiness.recommendations // []' "$file" 2>/dev/null || echo "[]")
-          code_snippets=$(jq -c '[.summary.ml_readiness.recommendations[]? | select(.code_snippet) | {category, code_snippet}] // []' "$file" 2>/dev/null || echo "[]")
-        }
-
-        parse_text_results() {
-          local file="$1"
-
-          # Basic text parsing for non-JSON formats
-          if grep -q "Overall Score:" "$file"; then
-            ml_score=$(grep "Overall Score:" "$file" | grep -o '[0-9]*\.*[0-9]*' | head -1 || echo "0")
-            readiness_level=$(grep "Overall Score:" "$file" | grep -o 'HIGH\|MEDIUM\|LOW\|Ready\|Needs Work\|Not Ready' | head -1 || echo "UNKNOWN")
-          else
-            ml_score="0"
-            readiness_level="UNKNOWN"
-          fi
-
-          # Set defaults for unsupported metrics in text format
-          completeness="0"
-          consistency="0"
-          rec_count="0"
-          recommendations='[]'
-          code_snippets='[]'
-        }
-
-        # Parse based on output format
-        case "${{ inputs.output-format }}" in
-          json)
-            if parse_json_results "$output_file"; then
-              echo "✓ JSON results parsed successfully"
-            else
-              echo "::warning::JSON parsing failed, falling back to text parsing"
-              parse_text_results "$output_file"
-            fi
-            ;;
-          *)
-            parse_text_results "$output_file"
-            echo "✓ Text results parsed"
-            ;;
-        esac
-
-        echo "::endgroup::"
-
-        echo "::group::Setting outputs and environment variables"
-
-        # Validate extracted metrics
-        if [[ ! "$ml_score" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
-          echo "::warning::Invalid ML score format: $ml_score, defaulting to 0"
-          ml_score="0"
-        fi
-
-        # Create structured analysis summary
-        analysis_summary=$(cat <<EOF
-ML Readiness Analysis Results:
-📊 Overall Score: ${ml_score}%
-🎯 Readiness Level: ${readiness_level}
-✅ Completeness: ${completeness}%
-🔄 Consistency: ${consistency}%
-💡 Recommendations: ${rec_count} items
-📁 File: ${{ inputs.file }}
-EOF
-        )
-
-        # Set GitHub outputs safely
-        {
-          echo "ml-score=$ml_score"
-          echo "readiness-level=$readiness_level"
-          echo "completeness-score=$completeness"
-          echo "consistency-score=$consistency"
-          echo "recommendations-count=$rec_count"
-        } >> "$GITHUB_OUTPUT"
-
-        # Set multiline outputs using heredoc syntax
-        {
-          echo "recommendations<<EOF_RECOMMENDATIONS"
-          echo "$recommendations"
-          echo "EOF_RECOMMENDATIONS"
-          echo "code-snippets<<EOF_CODE"
-          echo "$code_snippets"
-          echo "EOF_CODE"
-          echo "analysis-summary<<EOF_SUMMARY"
-          echo "$analysis_summary"
-          echo "EOF_SUMMARY"
-        } >> "$GITHUB_OUTPUT"
-
-        # Store for threshold validation
-        {
-          echo "ML_SCORE=$ml_score"
-          echo "THRESHOLD=${{ inputs.ml-threshold }}"
-        } >> "$GITHUB_ENV"
-
-        echo "::endgroup::"
-
-        # Display summary with GitHub annotations
-        echo "::notice title=Analysis Complete::ML Readiness Score: ${ml_score}% (Threshold: ${{ inputs.ml-threshold }}%)"
-
-    - name: Quality gate validation
-      shell: bash
-      run: |
-        set -euo pipefail
-
-        echo "::group::Quality gate validation"
-
-        # Extract values from environment with defaults
-        ml_score=${ML_SCORE:-0}
-        threshold=${THRESHOLD:-80}
-        fail_on_issues="${{ inputs.fail-on-issues }}"
-
-        echo "::notice::Validating ML readiness score: ${ml_score}% against threshold: ${threshold}%"
-
-        # Robust floating point comparison using awk
-        threshold_met() {
-          awk -v score="$ml_score" -v thresh="$threshold" 'BEGIN { exit !(score >= thresh) }'
-        }
-
-        if threshold_met; then
-          echo "::notice title=Quality Gate Passed::✅ ML score (${ml_score}%) meets threshold (${threshold}%)"
-          echo "🎉 Quality gate validation successful"
-        else
-          message="❌ ML score (${ml_score}%) below threshold (${threshold}%)"
-
-          if [[ "$fail_on_issues" == "true" ]]; then
-            echo "::error title=Quality Gate Failed::$message"
-            echo "💥 Quality gate validation failed - stopping workflow"
+      if ! cargo install dataprof --version "=$VERSION" --features minimal --locked; then
+        echo "::warning::Failed to install with lockfile, retrying without..."
+        if ! cargo install dataprof --version "=$VERSION" --features minimal; then
+          echo "::warning::Failed to install specific version, trying latest..."
+          if ! cargo install dataprof --features minimal; then
+            echo "::error::All installation attempts failed"
             exit 1
-          else
-            echo "::warning title=Quality Gate Warning::$message"
-            echo "⚠️ Quality gate warning - continuing workflow (fail-on-issues=false)"
           fi
         fi
+      fi
 
+      echo "::endgroup::"
+
+      # Verify installation and add to PATH
+      if command -v dataprof-cli &> /dev/null; then
+        echo "dataprof-cli installed successfully"
+        echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      else
+        echo "::error::dataprof-cli installation verification failed"
+        exit 1
+      fi
+
+      echo "::endgroup::"
+
+  - name: Run ML readiness analysis
+    id: ml-analysis
+    shell: bash
+    run: |
+      set -euo pipefail
+
+      echo "::group::Running ML readiness analysis"
+
+      # Setup temporary workspace with cleanup trap
+      temp_dir=$(mktemp -d)
+      output_file="$temp_dir/ml_analysis.${{ inputs.output-format }}"
+
+      cleanup() {
+        [[ -d "$temp_dir" ]] && rm -rf "$temp_dir"
+      }
+      trap cleanup EXIT
+
+      # Build command array
+      cmd_args=(
+        "${{ inputs.file }}"
+        "--quality"
+        "--ml-score"
+        "--format" "${{ inputs.output-format }}"
+      )
+
+      if [[ "${{ inputs.generate-code }}" == "true" ]]; then
+        cmd_args+=("--ml-code")
+      fi
+
+      # Execute analysis with proper error handling
+      echo "::notice::Executing: dataprof-cli ${cmd_args[*]}"
+
+      if ! dataprof-cli "${cmd_args[@]}" > "$output_file" 2>&1; then
+        exit_code=$?
+        echo "::error::Analysis failed with exit code $exit_code"
+        echo "::group::Error output"
+        cat "$output_file" 2>/dev/null || echo "No output available"
         echo "::endgroup::"
+        exit $exit_code
+      fi
 
-    - name: Generate workflow summary
-      shell: bash
-      run: |
-        set -euo pipefail
+      echo "Analysis completed successfully"
+      echo "::endgroup::"
 
-        echo "::group::Generating workflow summary"
+      echo "::group::Parsing analysis results"
 
-        # Determine threshold status
-        ml_score="${{ steps.ml-analysis.outputs.ml-score }}"
-        threshold="${{ inputs.ml-threshold }}"
-        threshold_status="🔴 FAILED"
-
-        if awk -v score="$ml_score" -v thresh="$threshold" 'BEGIN { exit !(score >= thresh) }'; then
-          threshold_status="✅ PASSED"
+      # Parse based on output format
+      if [[ "${{ inputs.output-format }}" == "json" ]]; then
+        # Ensure jq is available (GitHub runners have it pre-installed)
+        if ! command -v jq &> /dev/null; then
+          echo "::error::jq is required for JSON parsing but not available"
+          exit 1
         fi
 
-        # Generate comprehensive summary
-        cat >> "$GITHUB_STEP_SUMMARY" << EOF
-# 📊 DataProf ML Readiness Analysis
+        # Validate JSON format
+        if ! jq empty "$output_file" 2>/dev/null; then
+          echo "::error::Invalid JSON format in output file"
+          exit 1
+        fi
 
-## 🎯 Results Summary
+        # Extract metrics with proper error handling
+        ml_score=$(jq -r '.summary.ml_readiness.score // "0"' "$output_file" 2>/dev/null || echo "0")
+        readiness_level=$(jq -r '.summary.ml_readiness.level // "UNKNOWN"' "$output_file" 2>/dev/null || echo "UNKNOWN")
+        completeness=$(jq -r '.summary.completeness_score // "0"' "$output_file" 2>/dev/null || echo "0")
+        consistency=$(jq -r '.summary.consistency_score // "0"' "$output_file" 2>/dev/null || echo "0")
+        rec_count=$(jq -r '.summary.ml_readiness.recommendations // [] | length' "$output_file" 2>/dev/null || echo "0")
+        recommendations=$(jq -c '.summary.ml_readiness.recommendations // []' "$output_file" 2>/dev/null || echo "[]")
+        code_snippets=$(jq -c '[.summary.ml_readiness.recommendations[]? | select(.code_snippet) | {category, code_snippet}] // []' "$output_file" 2>/dev/null || echo "[]")
 
-| Metric | Score | Status |
-|--------|-------|--------|
-| **ML Readiness** | ${{ steps.ml-analysis.outputs.ml-score }}% | \`${{ steps.ml-analysis.outputs.readiness-level }}\` |
-| **Completeness** | ${{ steps.ml-analysis.outputs.completeness-score }}% | - |
-| **Consistency** | ${{ steps.ml-analysis.outputs.consistency-score }}% | - |
-| **Recommendations** | ${{ steps.ml-analysis.outputs.recommendations-count }} items | - |
+        echo "JSON results parsed successfully"
+      else
+        # Basic text parsing for non-JSON formats
+        if grep -q "Overall Score:" "$output_file"; then
+          ml_score=$(grep "Overall Score:" "$output_file" | grep -o '[0-9]*\.*[0-9]*' | head -1 || echo "0")
+          readiness_level=$(grep "Overall Score:" "$output_file" | grep -o 'HIGH\|MEDIUM\|LOW\|Ready\|Needs Work\|Not Ready' | head -1 || echo "UNKNOWN")
+        else
+          ml_score="0"
+          readiness_level="UNKNOWN"
+        fi
 
-## 🚦 Quality Gate
+        # Set defaults for unsupported metrics in text format
+        completeness="0"
+        consistency="0"
+        rec_count="0"
+        recommendations='[]'
+        code_snippets='[]'
 
-- **Threshold**: ${threshold}%
-- **Result**: ${threshold_status}
-- **Action**: \`${{ inputs.fail-on-issues }}\`
+        echo "Text results parsed"
+      fi
 
-## 📁 File Analysis
+      echo "::endgroup::"
 
-- **File**: \`${{ inputs.file }}\`
-- **Output Format**: \`${{ inputs.output-format }}\`
-- **Code Generation**: \`${{ inputs.generate-code }}\`
-- **DataProf Version**: \`${{ inputs.dataprof-version }}\`
+      echo "::group::Setting outputs and environment variables"
 
-## 💡 Next Steps
+      # Validate extracted metrics
+      if [[ ! "$ml_score" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+        echo "::warning::Invalid ML score format: $ml_score, defaulting to 0"
+        ml_score="0"
+      fi
 
-${{ steps.ml-analysis.outputs.recommendations-count != '0' && '- Review the detailed recommendations in the action outputs
-- Consider implementing the suggested preprocessing steps
-- Run analysis again after applying improvements' || '- ✨ Great! Your data appears to be ML-ready
-- No specific improvements needed at this time
-- Consider monitoring data quality over time' }}
+      # Create structured analysis summary
+      input_file="${{ inputs.file }}"
+      analysis_summary="ML Readiness Analysis Results:
+      Overall Score: ${ml_score}%
+      Readiness Level: ${readiness_level}
+      Completeness: ${completeness}%
+      Consistency: ${consistency}%
+      Recommendations: ${rec_count} items
+      File: ${input_file}"
 
----
-*Powered by [DataProf v${{ inputs.dataprof-version }}](https://github.com/AndreaBozzo/dataprof) • Generated $(date -u '+%Y-%m-%d %H:%M:%S UTC')*
-EOF
+      # Set GitHub outputs safely
+      {
+        echo "ml-score=$ml_score"
+        echo "readiness-level=$readiness_level"
+        echo "completeness-score=$completeness"
+        echo "consistency-score=$consistency"
+        echo "recommendations-count=$rec_count"
+      } >> "$GITHUB_OUTPUT"
 
-        echo "✓ Workflow summary generated"
-        echo "::endgroup::"
+      # Set multiline outputs using heredoc syntax
+      {
+        echo "recommendations<<EOF_RECOMMENDATIONS"
+        echo "$recommendations"
+        echo "EOF_RECOMMENDATIONS"
+        echo "code-snippets<<EOF_CODE"
+        echo "$code_snippets"
+        echo "EOF_CODE"
+        echo "analysis-summary<<EOF_SUMMARY"
+        echo "$analysis_summary"
+        echo "EOF_SUMMARY"
+      } >> "$GITHUB_OUTPUT"
+
+      # Store for threshold validation
+      {
+        echo "ML_SCORE=$ml_score"
+        echo "THRESHOLD=${{ inputs.ml-threshold }}"
+      } >> "$GITHUB_ENV"
+
+      echo "::endgroup::"
+
+      # Display summary with GitHub annotations
+      echo "::notice title=Analysis Complete::ML Readiness Score: ${ml_score}% (Threshold: ${{ inputs.ml-threshold }}%)"
+
+  - name: Quality gate validation
+    shell: bash
+    run: |
+      set -euo pipefail
+
+      echo "::group::Quality gate validation"
+
+      # Extract values from environment with defaults
+      ml_score=${ML_SCORE:-0}
+      threshold=${THRESHOLD:-80}
+      fail_on_issues="${{ inputs.fail-on-issues }}"
+
+      echo "::notice::Validating ML readiness score: ${ml_score}% against threshold: ${threshold}%"
+
+      # Robust floating point comparison using awk
+      if awk -v score="$ml_score" -v thresh="$threshold" 'BEGIN { exit !(score >= thresh) }'; then
+        echo "::notice title=Quality Gate Passed::ML score (${ml_score}%) meets threshold (${threshold}%)"
+        echo "Quality gate validation successful"
+      else
+        message="ML score (${ml_score}%) below threshold (${threshold}%)"
+
+        if [[ "$fail_on_issues" == "true" ]]; then
+          echo "::error title=Quality Gate Failed::$message"
+          echo "Quality gate validation failed - stopping workflow"
+          exit 1
+        else
+          echo "::warning title=Quality Gate Warning::$message"
+          echo "Quality gate warning - continuing workflow (fail-on-issues=false)"
+        fi
+      fi
+
+      echo "::endgroup::"
+
+  - name: Generate workflow summary
+    shell: bash
+    run: |
+      set -euo pipefail
+
+      echo "::group::Generating workflow summary"
+
+      # Determine threshold status
+      ml_score="${{ steps.ml-analysis.outputs.ml-score }}"
+      threshold="${{ inputs.ml-threshold }}"
+      threshold_status="FAILED"
+
+      if awk -v score="$ml_score" -v thresh="$threshold" 'BEGIN { exit !(score >= thresh) }'; then
+        threshold_status="PASSED"
+      fi
+
+      # Generate comprehensive summary
+      output_format="${{ inputs.output-format }}"
+      generate_code="${{ inputs.generate-code }}"
+      dataprof_version="${{ inputs.dataprof-version }}"
+      fail_on_issues="${{ inputs.fail-on-issues }}"
+      input_file="${{ inputs.file }}"
+      rec_count="${{ steps.ml-analysis.outputs.recommendations-count }}"
+
+      next_steps="- Great! Your data appears to be ML-ready
+      - No specific improvements needed at this time
+      - Consider monitoring data quality over time"
+
+      if [[ "$rec_count" != "0" ]]; then
+        next_steps="- Review the detailed recommendations in the action outputs
+        - Consider implementing the suggested preprocessing steps
+        - Run analysis again after applying improvements"
+      fi
+
+      {
+        echo "# DataProf ML Readiness Analysis"
+        echo ""
+        echo "## Results Summary"
+        echo ""
+        echo "| Metric | Score | Status |"
+        echo "|--------|-------|--------|"
+        echo "| **ML Readiness** | ${ml_score}% | ${readiness_level} |"
+        echo "| **Completeness** | ${{ steps.ml-analysis.outputs.completeness-score }}% | - |"
+        echo "| **Consistency** | ${{ steps.ml-analysis.outputs.consistency-score }}% | - |"
+        echo "| **Recommendations** | ${rec_count} items | - |"
+        echo ""
+        echo "## Quality Gate"
+        echo ""
+        echo "- **Threshold**: ${threshold}%"
+        echo "- **Result**: ${threshold_status}"
+        echo "- **Action**: ${fail_on_issues}"
+        echo ""
+        echo "## File Analysis"
+        echo ""
+        echo "- **File**: ${input_file}"
+        echo "- **Output Format**: ${output_format}"
+        echo "- **Code Generation**: ${generate_code}"
+        echo "- **DataProf Version**: ${dataprof_version}"
+        echo ""
+        echo "## Next Steps"
+        echo ""
+        echo "${next_steps}"
+        echo ""
+        echo "---"
+        echo "*Powered by [DataProf v${dataprof_version}](https://github.com/AndreaBozzo/dataprof) • Generated $(date -u '+%Y-%m-%d %H:%M:%S UTC')*"
+      } >> "$GITHUB_STEP_SUMMARY"
+
+      echo "Workflow summary generated"
+      echo "::endgroup::"
