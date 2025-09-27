@@ -15,6 +15,6 @@ jobs:
     - name: Test DataProf Action
       uses: ./
       with:
-        file_path: examples/sample_data.csv
-        output_format: json
-        save_profile: true
+        file: examples/sample_data.csv
+        output-format: json
+        ml-threshold: 70
