@@ -362,6 +362,7 @@ runs:
       fail_on_issues="${{ inputs.fail-on-issues }}"
       input_file="${{ inputs.file }}"
       rec_count="${{ steps.ml-analysis.outputs.recommendations-count }}"
+      readiness_level="${{ steps.ml-analysis.outputs.readiness-level }}"
 
       next_steps="- Great! Your data appears to be ML-ready
       - No specific improvements needed at this time
