@@ -1,0 +1,187 @@
+{
+  "metadata": {
+    "file_path": "test/test_data.csv",
+    "file_size_mb": 0.0018815994262695312,
+    "total_rows": 25,
+    "total_columns": 10,
+    "scan_time_ms": 99,
+    "sampling_info": null
+  },
+  "quality": {
+    "quality_score": 92.8
+  },
+  "columns": [
+    {
+      "name": "account_status",
+      "data_type": "String",
+      "total_count": 25,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "stats": {
+        "avg_length": 6.4,
+        "max_length": 8,
+        "min_length": 6,
+        "type": "text"
+      },
+      "patterns": []
+    },
+    {
+      "name": "customer_name",
+      "data_type": "String",
+      "total_count": 25,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "stats": {
+        "avg_length": 10.8,
+        "max_length": 13,
+        "min_length": 8,
+        "type": "text"
+      },
+      "patterns": []
+    },
+    {
+      "name": "id",
+      "data_type": "Integer",
+      "total_count": 25,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "stats": {
+        "max": 25.0,
+        "mean": 13.0,
+        "min": 1.0,
+        "type": "numeric"
+      },
+      "patterns": []
+    },
+    {
+      "name": "age",
+      "data_type": "Integer",
+      "total_count": 25,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "stats": {
+        "max": 52.0,
+        "mean": 36.04,
+        "min": 26.0,
+        "type": "numeric"
+      },
+      "patterns": []
+    },
+    {
+      "name": "total_purchases",
+      "data_type": "Integer",
+      "total_count": 25,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "stats": {
+        "max": 25.0,
+        "mean": 9.92,
+        "min": 0.0,
+        "type": "numeric"
+      },
+      "patterns": []
+    },
+    {
+      "name": "country",
+      "data_type": "String",
+      "total_count": 25,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "stats": {
+        "avg_length": 6.44,
+        "max_length": 14,
+        "min_length": 2,
+        "type": "text"
+      },
+      "patterns": []
+    },
+    {
+      "name": "signup_date",
+      "data_type": "Date",
+      "total_count": 25,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "stats": {
+        "avg_length": 10.0,
+        "max_length": 10,
+        "min_length": 10,
+        "type": "text"
+      },
+      "patterns": []
+    },
+    {
+      "name": "customer_segment",
+      "data_type": "String",
+      "total_count": 25,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "stats": {
+        "avg_length": 7.56,
+        "max_length": 8,
+        "min_length": 7,
+        "type": "text"
+      },
+      "patterns": []
+    },
+    {
+      "name": "email",
+      "data_type": "String",
+      "total_count": 25,
+      "null_count": 6,
+      "null_percentage": 24.0,
+      "stats": {
+        "avg_length": 16.473684210526315,
+        "max_length": 19,
+        "min_length": 15,
+        "type": "text"
+      },
+      "patterns": [
+        {
+          "name": "Email",
+          "match_count": 19,
+          "match_percentage": 100.0
+        }
+      ]
+    },
+    {
+      "name": "last_purchase_amount",
+      "data_type": "Float",
+      "total_count": 25,
+      "null_count": 0,
+      "null_percentage": 0.0,
+      "stats": {
+        "max": 340.75,
+        "mean": 146.49559999999997,
+        "min": 0.0,
+        "type": "numeric"
+      },
+      "patterns": []
+    }
+  ],
+  "summary": {
+    "data_quality_score": 92.8,
+    "completeness_score": 97.6
+  },
+  "data_quality_metrics": {
+    "completeness": {
+      "missing_values_ratio": 2.4,
+      "complete_records_ratio": 76.0,
+      "null_columns": []
+    },
+    "consistency": {
+      "data_type_consistency": 100.0,
+      "format_violations": 0,
+      "encoding_issues": 0
+    },
+    "uniqueness": {
+      "duplicate_rows": 0,
+      "key_uniqueness": 100.0,
+      "high_cardinality_warning": true
+    },
+    "accuracy": {
+      "outlier_ratio": 0.0,
+      "range_violations": 0,
+      "negative_values_in_positive": 0
+    }
+  }
+}

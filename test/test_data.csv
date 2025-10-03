@@ -1,0 +1,26 @@
+id,customer_name,email,signup_date,age,total_purchases,last_purchase_amount,account_status,country,customer_segment
+1,Alice Johnson,alice.j@email.com,2023-01-15,34,12,156.99,active,USA,premium
+2,Bob Smith,bob.smith@email.com,2023-02-20,28,5,89.50,active,UK,standard
+3,Carol White,carol.w@email.com,2023-03-10,45,25,340.75,active,Canada,premium
+4,David Brown,,2023-04-05,31,3,45.00,inactive,USA,standard
+5,Emma Davis,emma.d@email.com,2023-05-12,29,8,120.30,active,Australia,standard
+6,Frank Miller,frank.m@email.com,2023-06-18,52,18,275.60,active,Germany,premium
+7,Grace Wilson,,2023-07-22,38,0,0.00,inactive,UK,standard
+8,Henry Moore,henry.m@email.com,2023-08-30,41,14,198.45,active,France,premium
+9,Ivy Taylor,ivy.t@email.com,2023-09-14,33,7,92.80,active,USA,standard
+10,Jack Anderson,jack.a@email.com,2023-10-25,27,11,167.20,active,Spain,premium
+11,Kate Thomas,,2023-11-08,36,2,34.50,inactive,Italy,standard
+12,Leo Jackson,leo.j@email.com,2023-12-03,44,20,289.90,active,Netherlands,premium
+13,Mia Martin,mia.m@email.com,2024-01-17,30,6,78.40,active,Belgium,standard
+14,Noah Lee,noah.l@email.com,2024-02-21,48,16,234.70,active,Sweden,premium
+15,Olivia Harris,,2024-03-15,35,1,23.00,inactive,Norway,standard
+16,Paul Clark,paul.c@email.com,2024-04-09,39,9,145.60,active,Denmark,standard
+17,Quinn Lewis,quinn.l@email.com,2024-05-28,26,4,67.30,active,Finland,standard
+18,Rachel Walker,rachel.w@email.com,2024-06-12,42,22,312.85,active,Poland,premium
+19,Sam Hall,,2024-07-05,31,0,0.00,inactive,Czech Republic,standard
+20,Tina Allen,tina.a@email.com,2024-08-19,37,13,189.50,active,Austria,premium
+21,Uma Young,uma.y@email.com,2024-09-22,29,5,95.20,active,Switzerland,standard
+22,Victor King,,2024-10-11,46,17,256.40,active,Ireland,premium
+23,Wendy Wright,wendy.w@email.com,2024-11-03,32,8,112.70,active,Portugal,standard
+24,Xander Lopez,xander.l@email.com,2024-12-15,40,19,278.95,active,Greece,premium
+25,Yara Hill,yara.h@email.com,2025-01-08,28,3,56.80,active,Hungary,standard

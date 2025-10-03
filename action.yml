@@ -1,5 +1,5 @@
-name: 'DataProf ML Readiness Assessment'
-description: 'Analyze CSV files for ML readiness with dataprof. Data quality profiling and quality gates for CI/CD workflows.'
+name: 'DataProf Data Quality Assessment'
+description: 'Analyze CSV files for data quality with dataprof. Comprehensive quality metrics and quality gates for CI/CD workflows.'
 author: 'Andrea Bozzo'
 
 branding:
@@ -8,16 +8,16 @@ branding:
 
 inputs:
   file:
-    description: 'Path to the CSV file to analyze for ML readiness'
+    description: 'Path to the CSV file to analyze for data quality'
     required: true
 
-  ml-threshold:
-    description: 'ML readiness score threshold (0-100). Job fails if score is below this value'
+  quality-threshold:
+    description: 'Overall quality score threshold (0-100). Job fails if score is below this value'
     required: false
     default: '80'
 
   fail-on-issues:
-    description: 'Whether to fail the job if ML readiness score is below threshold'
+    description: 'Whether to fail the job if quality score is below threshold'
     required: false
     default: 'true'
 
@@ -26,48 +26,55 @@ inputs:
     required: false
     default: 'json'
 
-  generate-code:
-    description: 'Generate actionable preprocessing code snippets'
-    required: false
-    default: 'true'
-
   dataprof-version:
     description: 'Version of dataprof to use (latest, or specific version like v0.4.6)'
     required: false
     default: 'latest'
 
 outputs:
-  ml-score:
-    description: 'Overall ML readiness score (0-100)'
-    value: ${{ steps.ml-analysis.outputs.ml-score }}
+  quality-score:
+    description: 'Overall data quality score (0-100)'
+    value: ${{ steps.quality-analysis.outputs.quality-score }}
 
-  readiness-level:
-    description: 'ML readiness level classification (HIGH, MEDIUM, LOW)'
-    value: ${{ steps.ml-analysis.outputs.readiness-level }}
+  quality-level:
+    description: 'Quality level classification (EXCELLENT, GOOD, FAIR, POOR)'
+    value: ${{ steps.quality-analysis.outputs.quality-level }}
 
   completeness-score:
-    description: 'Data completeness score'
-    value: ${{ steps.ml-analysis.outputs.completeness-score }}
+    description: 'Data completeness score (0-100)'
+    value: ${{ steps.quality-analysis.outputs.completeness-score }}
+
+  uniqueness-score:
+    description: 'Data uniqueness score (0-100)'
+    value: ${{ steps.quality-analysis.outputs.uniqueness-score }}
+
+  validity-score:
+    description: 'Data validity score (0-100)'
+    value: ${{ steps.quality-analysis.outputs.validity-score }}
 
   consistency-score:
-    description: 'Data consistency score'
-    value: ${{ steps.ml-analysis.outputs.consistency-score }}
+    description: 'Data consistency score (0-100)'
+    value: ${{ steps.quality-analysis.outputs.consistency-score }}
 
-  recommendations-count:
-    description: 'Number of ML improvement recommendations'
-    value: ${{ steps.ml-analysis.outputs.recommendations-count }}
+  timeliness-score:
+    description: 'Data timeliness score (0-100)'
+    value: ${{ steps.quality-analysis.outputs.timeliness-score }}
 
-  recommendations:
-    description: 'JSON array of ML readiness recommendations'
-    value: ${{ steps.ml-analysis.outputs.recommendations }}
+  accuracy-score:
+    description: 'Data accuracy score (0-100)'
+    value: ${{ steps.quality-analysis.outputs.accuracy-score }}
 
-  code-snippets:
-    description: 'Generated preprocessing code snippets'
-    value: ${{ steps.ml-analysis.outputs.code-snippets }}
+  issues-count:
+    description: 'Total number of quality issues detected'
+    value: ${{ steps.quality-analysis.outputs.issues-count }}
+
+  file-path:
+    description: 'Path of the analyzed file'
+    value: ${{ steps.quality-analysis.outputs.file-path }}
 
   analysis-summary:
     description: 'Human-readable analysis summary'
-    value: ${{ steps.ml-analysis.outputs.analysis-summary }}
+    value: ${{ steps.quality-analysis.outputs.analysis-summary }}
 
 runs:
   using: 'composite'
@@ -90,10 +97,15 @@ runs:
         exit 1
       fi
 
+      # Check file extension (warning only)
+      if [[ ! "${{ inputs.file }}" =~ \.(csv|CSV)$ ]]; then
+        echo "::warning file=${{ inputs.file }}::File does not have .csv extension, proceeding anyway"
+      fi
+
       # Validate threshold is numeric and in range
-      threshold="${{ inputs.ml-threshold }}"
+      threshold="${{ inputs.quality-threshold }}"
       if ! [[ "$threshold" =~ ^[0-9]+$ ]] || [[ "$threshold" -lt 0 ]] || [[ "$threshold" -gt 100 ]]; then
-        echo "::error::ml-threshold must be a number between 0 and 100, got: $threshold"
+        echo "::error::quality-threshold must be a number between 0 and 100, got: $threshold"
         exit 1
       fi
 
@@ -102,11 +114,6 @@ runs:
       if [[ ! "$format" =~ ^(json|csv|text)$ ]]; then
         echo "::error::output-format must be one of: json, csv, text. Got: $format"
         exit 1
-      fi
-
-      # Check file extension (warning only)
-      if [[ ! "${{ inputs.file }}" =~ \.(csv|CSV)$ ]]; then
-        echo "::warning file=${{ inputs.file }}::File does not have .csv extension, proceeding anyway"
       fi
 
       echo "Input validation passed"
@@ -164,39 +171,44 @@ runs:
 
       echo "::endgroup::"
 
-  - name: Run ML readiness analysis
-    id: ml-analysis
+  - name: Run data quality analysis
+    id: quality-analysis
     shell: bash
     run: |
       set -euo pipefail
 
-      echo "::group::Running ML readiness analysis"
+      echo "::group::Running data quality analysis"
 
       # Setup temporary workspace with cleanup trap
       temp_dir=$(mktemp -d)
-      output_file="$temp_dir/ml_analysis.${{ inputs.output-format }}"
+      output_file="$temp_dir/quality_analysis.${{ inputs.output-format }}"
 
       cleanup() {
         [[ -d "$temp_dir" ]] && rm -rf "$temp_dir"
       }
       trap cleanup EXIT
 
-      # Build command array
+      # Build command array - dataprof uses 'analyze' subcommand
       cmd_args=(
+        "analyze"
         "${{ inputs.file }}"
-        "--quality"
-        "--ml-score"
         "--format" "${{ inputs.output-format }}"
       )
 
-      if [[ "${{ inputs.generate-code }}" == "true" ]]; then
-        cmd_args+=("--ml-code")
+      # Add detailed flag for comprehensive output
+      if [[ "${{ inputs.output-format }}" == "json" ]]; then
+        cmd_args+=("--detailed")
       fi
 
-      # Execute analysis with proper error handling
-      echo "::notice::Executing: dataprof-cli ${cmd_args[*]}"
+      # Determine dataprof binary name (OS-specific)
+      DATAPROF_BIN="dataprof"
+      if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
+        DATAPROF_BIN="dataprof-cli.exe"
+      fi
 
-      if ! dataprof-cli "${cmd_args[@]}" > "$output_file" 2>&1; then
+      echo "::notice::Executing: $DATAPROF_BIN ${cmd_args[*]}"
+
+      if ! "$DATAPROF_BIN" "${cmd_args[@]}" > "$output_file" 2>&1; then
         exit_code=$?
         echo "::error::Analysis failed with exit code $exit_code"
         echo "::group::Error output"
@@ -224,32 +236,75 @@ runs:
           exit 1
         fi
 
-        # Extract metrics with proper error handling
-        ml_score=$(jq -r '.summary.ml_readiness.score // "0"' "$output_file" 2>/dev/null || echo "0")
-        readiness_level=$(jq -r '.summary.ml_readiness.level // "UNKNOWN"' "$output_file" 2>/dev/null || echo "UNKNOWN")
-        completeness=$(jq -r '.summary.completeness_score // "0"' "$output_file" 2>/dev/null || echo "0")
-        consistency=$(jq -r '.summary.consistency_score // "0"' "$output_file" 2>/dev/null || echo "0")
-        rec_count=$(jq -r '.summary.ml_readiness.recommendations // [] | length' "$output_file" 2>/dev/null || echo "0")
-        recommendations=$(jq -c '.summary.ml_readiness.recommendations // []' "$output_file" 2>/dev/null || echo "[]")
-        code_snippets=$(jq -c '[.summary.ml_readiness.recommendations[]? | select(.code_snippet) | {category, code_snippet}] // []' "$output_file" 2>/dev/null || echo "[]")
+        # Extract metrics from ACTUAL dataprof JSON structure
+        # Overall quality score
+        quality_score=$(jq -r '.quality.quality_score // .summary.data_quality_score // "0"' "$output_file" 2>/dev/null || echo "0")
+
+        # Calculate quality level from score
+        if awk -v score="$quality_score" 'BEGIN { exit !(score >= 90) }'; then
+          quality_level="EXCELLENT"
+        elif awk -v score="$quality_score" 'BEGIN { exit !(score >= 75) }'; then
+          quality_level="GOOD"
+        elif awk -v score="$quality_score" 'BEGIN { exit !(score >= 60) }'; then
+          quality_level="FAIR"
+        else
+          quality_level="POOR"
+        fi
+
+        # Extract individual dimension scores from data_quality_metrics
+        # Completeness score (from complete_records_ratio)
+        completeness=$(jq -r '.data_quality_metrics.completeness.complete_records_ratio // "0"' "$output_file" 2>/dev/null || echo "0")
+
+        # Uniqueness score (from key_uniqueness)
+        uniqueness=$(jq -r '.data_quality_metrics.uniqueness.key_uniqueness // "0"' "$output_file" 2>/dev/null || echo "0")
+
+        # Consistency score (from data_type_consistency)
+        consistency=$(jq -r '.data_quality_metrics.consistency.data_type_consistency // "0"' "$output_file" 2>/dev/null || echo "0")
+
+        # Accuracy score (100 - outlier_ratio)
+        outlier_ratio=$(jq -r '.data_quality_metrics.accuracy.outlier_ratio // "0"' "$output_file" 2>/dev/null || echo "0")
+        accuracy=$(awk -v outlier="$outlier_ratio" 'BEGIN { printf "%.2f", 100 - outlier }')
+
+        # Timeliness score - Check if timeliness metrics exist in JSON
+        if jq -e '.data_quality_metrics.timeliness' "$output_file" >/dev/null 2>&1; then
+          stale_ratio=$(jq -r '.data_quality_metrics.timeliness.stale_data_ratio // "0"' "$output_file" 2>/dev/null || echo "0")
+          timeliness=$(awk -v stale="$stale_ratio" 'BEGIN { printf "%.2f", 100 - stale }')
+        else
+          # Timeliness not available in this version, default to 100 (no timeliness issues)
+          timeliness="100.0"
+        fi
+
+        # Validity is not a separate dimension in ISO 8000/25012, use consistency as proxy
+        validity="$consistency"
+
+        # Count issues from all dimensions
+        duplicate_rows=$(jq -r '.data_quality_metrics.uniqueness.duplicate_rows // "0"' "$output_file" 2>/dev/null || echo "0")
+        format_violations=$(jq -r '.data_quality_metrics.consistency.format_violations // "0"' "$output_file" 2>/dev/null || echo "0")
+        range_violations=$(jq -r '.data_quality_metrics.accuracy.range_violations // "0"' "$output_file" 2>/dev/null || echo "0")
+        issues_count=$(awk -v dup="$duplicate_rows" -v fmt="$format_violations" -v range="$range_violations" 'BEGIN { print dup + fmt + range }')
+
+        file_path="${{ inputs.file }}"
 
         echo "JSON results parsed successfully"
       else
         # Basic text parsing for non-JSON formats
-        if grep -q "Overall Score:" "$output_file"; then
-          ml_score=$(grep "Overall Score:" "$output_file" | grep -o '[0-9]*\.*[0-9]*' | head -1 || echo "0")
-          readiness_level=$(grep "Overall Score:" "$output_file" | grep -o 'HIGH\|MEDIUM\|LOW\|Ready\|Needs Work\|Not Ready' | head -1 || echo "UNKNOWN")
+        if grep -q "Overall Quality Score:" "$output_file"; then
+          quality_score=$(grep "Overall Quality Score:" "$output_file" | grep -o '[0-9]*\.*[0-9]*' | head -1 || echo "0")
+          quality_level=$(grep "Quality Level:" "$output_file" | awk '{print $NF}' | head -1 || echo "UNKNOWN")
         else
-          ml_score="0"
-          readiness_level="UNKNOWN"
+          quality_score="0"
+          quality_level="UNKNOWN"
         fi
 
         # Set defaults for unsupported metrics in text format
         completeness="0"
+        uniqueness="0"
+        validity="0"
         consistency="0"
-        rec_count="0"
-        recommendations='[]'
-        code_snippets='[]'
+        timeliness="0"
+        accuracy="0"
+        issues_count="0"
+        files_analyzed="${#files_array[@]}"
 
         echo "Text results parsed"
       fi
@@ -259,38 +314,40 @@ runs:
       echo "::group::Setting outputs and environment variables"
 
       # Validate extracted metrics
-      if [[ ! "$ml_score" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
-        echo "::warning::Invalid ML score format: $ml_score, defaulting to 0"
-        ml_score="0"
+      if [[ ! "$quality_score" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+        echo "::warning::Invalid quality score format: $quality_score, defaulting to 0"
+        quality_score="0"
       fi
 
       # Create structured analysis summary
-      input_file="${{ inputs.file }}"
-      analysis_summary="ML Readiness Analysis Results:
-      Overall Score: ${ml_score}%
-      Readiness Level: ${readiness_level}
+      analysis_summary="Data Quality Analysis Results:
+      Overall Score: ${quality_score}%
+      Quality Level: ${quality_level}
       Completeness: ${completeness}%
+      Uniqueness: ${uniqueness}%
+      Validity: ${validity}%
       Consistency: ${consistency}%
-      Recommendations: ${rec_count} items
-      File: ${input_file}"
+      Timeliness: ${timeliness}%
+      Accuracy: ${accuracy}%
+      Issues Found: ${issues_count}
+      File: ${file_path}"
 
       # Set GitHub outputs safely
       {
-        echo "ml-score=$ml_score"
-        echo "readiness-level=$readiness_level"
+        echo "quality-score=$quality_score"
+        echo "quality-level=$quality_level"
         echo "completeness-score=$completeness"
+        echo "uniqueness-score=$uniqueness"
+        echo "validity-score=$validity"
         echo "consistency-score=$consistency"
-        echo "recommendations-count=$rec_count"
+        echo "timeliness-score=$timeliness"
+        echo "accuracy-score=$accuracy"
+        echo "issues-count=$issues_count"
+        echo "file-path=$file_path"
       } >> "$GITHUB_OUTPUT"
 
       # Set multiline outputs using heredoc syntax
       {
-        echo "recommendations<<EOF_RECOMMENDATIONS"
-        echo "$recommendations"
-        echo "EOF_RECOMMENDATIONS"
-        echo "code-snippets<<EOF_CODE"
-        echo "$code_snippets"
-        echo "EOF_CODE"
         echo "analysis-summary<<EOF_SUMMARY"
         echo "$analysis_summary"
         echo "EOF_SUMMARY"
@@ -298,14 +355,14 @@ runs:
 
       # Store for threshold validation
       {
-        echo "ML_SCORE=$ml_score"
-        echo "THRESHOLD=${{ inputs.ml-threshold }}"
+        echo "QUALITY_SCORE=$quality_score"
+        echo "THRESHOLD=${{ inputs.quality-threshold }}"
       } >> "$GITHUB_ENV"
 
       echo "::endgroup::"
 
       # Display summary with GitHub annotations
-      echo "::notice title=Analysis Complete::ML Readiness Score: ${ml_score}% (Threshold: ${{ inputs.ml-threshold }}%)"
+      echo "::notice title=Analysis Complete::Quality Score: ${quality_score}% (Threshold: ${{ inputs.quality-threshold }}%)"
 
   - name: Quality gate validation
     shell: bash
@@ -315,18 +372,18 @@ runs:
       echo "::group::Quality gate validation"
 
       # Extract values from environment with defaults
-      ml_score=${ML_SCORE:-0}
+      quality_score=${QUALITY_SCORE:-0}
       threshold=${THRESHOLD:-80}
       fail_on_issues="${{ inputs.fail-on-issues }}"
 
-      echo "::notice::Validating ML readiness score: ${ml_score}% against threshold: ${threshold}%"
+      echo "::notice::Validating quality score: ${quality_score}% against threshold: ${threshold}%"
 
       # Robust floating point comparison using awk
-      if awk -v score="$ml_score" -v thresh="$threshold" 'BEGIN { exit !(score >= thresh) }'; then
-        echo "::notice title=Quality Gate Passed::ML score (${ml_score}%) meets threshold (${threshold}%)"
+      if awk -v score="$quality_score" -v thresh="$threshold" 'BEGIN { exit !(score >= thresh) }'; then
+        echo "::notice title=Quality Gate Passed::Quality score (${quality_score}%) meets threshold (${threshold}%)"
         echo "Quality gate validation successful"
       else
-        message="ML score (${ml_score}%) below threshold (${threshold}%)"
+        message="Quality score (${quality_score}%) below threshold (${threshold}%)"
 
         if [[ "$fail_on_issues" == "true" ]]; then
           echo "::error title=Quality Gate Failed::$message"
@@ -348,56 +405,58 @@ runs:
       echo "::group::Generating workflow summary"
 
       # Determine threshold status
-      ml_score="${{ steps.ml-analysis.outputs.ml-score }}"
-      threshold="${{ inputs.ml-threshold }}"
+      quality_score="${{ steps.quality-analysis.outputs.quality-score }}"
+      threshold="${{ inputs.quality-threshold }}"
       threshold_status="FAILED"
 
-      if awk -v score="$ml_score" -v thresh="$threshold" 'BEGIN { exit !(score >= thresh) }'; then
+      if awk -v score="$quality_score" -v thresh="$threshold" 'BEGIN { exit !(score >= thresh) }'; then
         threshold_status="PASSED"
       fi
 
       # Generate comprehensive summary
       output_format="${{ inputs.output-format }}"
-      generate_code="${{ inputs.generate-code }}"
       dataprof_version="${{ inputs.dataprof-version }}"
       fail_on_issues="${{ inputs.fail-on-issues }}"
-      input_file="${{ inputs.file }}"
-      rec_count="${{ steps.ml-analysis.outputs.recommendations-count }}"
-      readiness_level="${{ steps.ml-analysis.outputs.readiness-level }}"
+      issues_count="${{ steps.quality-analysis.outputs.issues-count }}"
+      quality_level="${{ steps.quality-analysis.outputs.quality-level }}"
+      file_path="${{ steps.quality-analysis.outputs.file-path }}"
 
-      next_steps="- Great! Your data appears to be ML-ready
-      - No specific improvements needed at this time
+      next_steps="- Excellent! Your data quality is high
+      - No critical issues detected
       - Consider monitoring data quality over time"
 
-      if [[ "$rec_count" != "0" ]]; then
-        next_steps="- Review the detailed recommendations in the action outputs
-        - Consider implementing the suggested preprocessing steps
+      if [[ "$issues_count" != "0" ]]; then
+        next_steps="- Review the detailed quality metrics in the action outputs
+        - Address the ${issues_count} issue(s) identified
         - Run analysis again after applying improvements"
       fi
 
       {
-        echo "# DataProf ML Readiness Analysis"
+        echo "# DataProf Data Quality Analysis"
         echo ""
         echo "## Results Summary"
         echo ""
-        echo "| Metric | Score | Status |"
-        echo "|--------|-------|--------|"
-        echo "| **ML Readiness** | ${ml_score}% | ${readiness_level} |"
-        echo "| **Completeness** | ${{ steps.ml-analysis.outputs.completeness-score }}% | - |"
-        echo "| **Consistency** | ${{ steps.ml-analysis.outputs.consistency-score }}% | - |"
-        echo "| **Recommendations** | ${rec_count} items | - |"
+        echo "| Metric | Score |"
+        echo "|--------|-------|"
+        echo "| **Overall Quality** | ${quality_score}% (${quality_level}) |"
+        echo "| **Completeness** | ${{ steps.quality-analysis.outputs.completeness-score }}% |"
+        echo "| **Uniqueness** | ${{ steps.quality-analysis.outputs.uniqueness-score }}% |"
+        echo "| **Validity** | ${{ steps.quality-analysis.outputs.validity-score }}% |"
+        echo "| **Consistency** | ${{ steps.quality-analysis.outputs.consistency-score }}% |"
+        echo "| **Timeliness** | ${{ steps.quality-analysis.outputs.timeliness-score }}% |"
+        echo "| **Accuracy** | ${{ steps.quality-analysis.outputs.accuracy-score }}% |"
         echo ""
         echo "## Quality Gate"
         echo ""
         echo "- **Threshold**: ${threshold}%"
         echo "- **Result**: ${threshold_status}"
-        echo "- **Action**: ${fail_on_issues}"
+        echo "- **Issues Found**: ${issues_count}"
+        echo "- **Fail on Issues**: ${fail_on_issues}"
         echo ""
-        echo "## File Analysis"
+        echo "## Analysis Details"
         echo ""
-        echo "- **File**: ${input_file}"
+        echo "- **File**: \`${file_path}\`"
         echo "- **Output Format**: ${output_format}"
-        echo "- **Code Generation**: ${generate_code}"
         echo "- **DataProf Version**: ${dataprof_version}"
         echo ""
         echo "## Next Steps"

@@ -1,0 +1,11 @@
+employee_id,first_name,last_name,department,salary,hire_date,performance_rating
+E001,John,Smith,Engineering,85000,2020-03-15,4.5
+E002,Sarah,Johnson,Marketing,72000,2021-06-01,4.2
+E003,Michael,Williams,Sales,68000,2022-01-10,3.8
+E004,Emily,Brown,Engineering,92000,2019-11-20,4.7
+E005,David,Jones,HR,65000,2023-02-14,4.0
+E006,Jessica,Garcia,,71000,2021-09-05,3.9
+E007,Christopher,Miller,Engineering,88000,2020-07-22,4.4
+E008,Amanda,Davis,Finance,79000,2022-05-18,4.1
+E009,Matthew,Rodriguez,Sales,70000,2023-08-30,3.7
+E010,Ashley,Martinez,Marketing,,2021-12-03,4.3

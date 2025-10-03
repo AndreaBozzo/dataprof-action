@@ -1,6 +1,0 @@
-customer_id,order_date,amount,email,phone,status
-CUS-100001,2024-01-15,156.78,mario.rossi@email.it,+39 02 1234567,completed
-CUS-100002,2024-01-16,89.50,luigi.verdi@gmail.com,+39 06 7654321,completed
-CUS-100003,16/01/2024,234.00,giuseppe.bianchi@email.it,02-9876543,pending
-CUS-100004,2024-01-17,,anna.neri@,3312345678,completed
-CUS-100005,2024-01-18,156.78,mario.rossi@email.it,+39 02 1234567,cancelled

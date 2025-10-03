@@ -1,0 +1,11 @@
+product_id,product_name,category,price,stock_quantity,last_updated,supplier_code
+101,Laptop Pro 15,Electronics,1299.99,45,2024-11-20,SUPP_001
+102,Wireless Mouse,Accessories,29.99,150,2024-11-19,SUPP_002
+103,USB-C Cable,Accessories,12.50,200,2024-11-18,SUPP_002
+104,Monitor 27inch,Electronics,399.00,30,2024-11-17,SUPP_003
+105,Keyboard Mechanical,Accessories,89.99,75,2024-11-16,SUPP_001
+106,,Electronics,599.99,20,2024-11-15,SUPP_004
+107,Webcam HD,Electronics,79.00,60,2024-11-14,SUPP_002
+108,Desk Lamp LED,Furniture,45.50,100,2024-11-13,SUPP_005
+109,Office Chair,,249.99,25,2024-11-12,SUPP_005
+110,Notebook A4,Stationery,3.99,500,2024-11-11,SUPP_006
