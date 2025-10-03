@@ -304,7 +304,7 @@ runs:
         timeliness="0"
         accuracy="0"
         issues_count="0"
-        files_analyzed="${#files_array[@]}"
+        file_path="${{ inputs.file }}"
 
         echo "Text results parsed"
       fi
