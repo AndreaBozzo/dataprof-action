@@ -160,12 +160,22 @@ runs:
 
       echo "::endgroup::"
 
-      # Verify installation and add to PATH
+      # Verify installation - binary is named 'dataprof-cli'
       if command -v dataprof-cli &> /dev/null; then
-        echo "dataprof-cli installed successfully"
+        echo "✅ dataprof-cli installed successfully"
+        # Add cargo bin to PATH for subsequent steps
         echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+        INSTALLED_BIN=$(which dataprof-cli)
+        echo "::notice::Binary location: $INSTALLED_BIN"
+
+        # Show version
+        dataprof-cli --version || echo "::warning::Could not get version"
       else
         echo "::error::dataprof-cli installation verification failed"
+        echo "::notice::Checking for alternative binary names..."
+        command -v dataprof && echo "Found 'dataprof' binary" || echo "No dataprof binary found"
+        ls -la "$HOME/.cargo/bin/" 2>/dev/null || echo "Cargo bin directory not accessible"
         exit 1
       fi
 
@@ -200,10 +210,12 @@ runs:
         cmd_args+=("--detailed")
       fi
 
-      # Determine dataprof binary name (OS-specific)
-      DATAPROF_BIN="dataprof"
-      if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
+      # Determine dataprof binary name
+      # The binary is always named 'dataprof-cli' (with .exe on Windows)
+      if [[ "$RUNNER_OS" == "Windows" ]] || [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
         DATAPROF_BIN="dataprof-cli.exe"
+      else
+        DATAPROF_BIN="dataprof-cli"
       fi
 
       echo "::notice::Executing: $DATAPROF_BIN ${cmd_args[*]}"
