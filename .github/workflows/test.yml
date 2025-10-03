@@ -5,16 +5,114 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
-  test:
+  test-action:
     runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
+    name: Test Data Quality Analysis
 
-    - name: Test DataProf Action
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Create test data
+      run: |
+        mkdir -p test_data
+        cat > test_data/sample.csv << 'EOF'
+        id,name,email,age,salary,department,status
+        1,Alice Johnson,alice@example.com,28,65000,Engineering,active
+        2,Bob Smith,bob@example.com,34,72000,Marketing,active
+        3,Carol White,,42,58000,Sales,active
+        4,David Brown,david@example.com,31,68000,Engineering,inactive
+        5,Emma Davis,emma@example.com,29,63000,Marketing,active
+        6,Frank Miller,,38,71000,Sales,active
+        7,Grace Wilson,grace@example.com,45,79000,Engineering,active
+        8,Henry Moore,henry@example.com,33,66000,Marketing,inactive
+        9,Ivy Taylor,ivy@example.com,27,61000,Sales,active
+        10,Jack Anderson,jack@example.com,36,74000,Engineering,active
+        EOF
+
+    - name: Run DataProf Analysis
+      id: dataprof
       uses: ./
       with:
-        file: examples/sample_data.csv
+        file: 'test_data/sample.csv'
+        quality-threshold: 75
+        fail-on-issues: false
         output-format: json
-        ml-threshold: 70
+
+    - name: Display Results
+      run: |
+        echo "## DataProf Analysis Results"
+        echo "Quality Score: ${{ steps.dataprof.outputs.quality-score }}%"
+        echo "Quality Level: ${{ steps.dataprof.outputs.quality-level }}"
+        echo "Completeness: ${{ steps.dataprof.outputs.completeness-score }}%"
+        echo "Uniqueness: ${{ steps.dataprof.outputs.uniqueness-score }}%"
+        echo "Validity: ${{ steps.dataprof.outputs.validity-score }}%"
+        echo "Consistency: ${{ steps.dataprof.outputs.consistency-score }}%"
+        echo "Timeliness: ${{ steps.dataprof.outputs.timeliness-score }}%"
+        echo "Accuracy: ${{ steps.dataprof.outputs.accuracy-score }}%"
+        echo "Issues Count: ${{ steps.dataprof.outputs.issues-count }}"
+        echo "File: ${{ steps.dataprof.outputs.file-path }}"
+
+    - name: Validate Outputs
+      run: |
+        score="${{ steps.dataprof.outputs.quality-score }}"
+
+        # Check score is numeric
+        if ! [[ "$score" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+          echo "ERROR: Quality score is not numeric: $score"
+          exit 1
+        fi
+
+        # Check score is in valid range
+        if (( $(echo "$score < 0" | bc -l) )) || (( $(echo "$score > 100" | bc -l) )); then
+          echo "ERROR: Quality score out of range (0-100): $score"
+          exit 1
+        fi
+
+        echo "✅ All validations passed!"
+        echo "Quality score: ${score}%"
+
+  test-threshold-fail:
+    runs-on: ubuntu-latest
+    name: Test Quality Gate Failure
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Create problematic test data
+      run: |
+        mkdir -p test_data
+        cat > test_data/bad_data.csv << 'EOF'
+        id,name,email,age,value
+        1,,,,-100
+        2,Test,,999,
+        3,,invalid-email,,
+        ,,,300,
+        5,Name,,,50
+        EOF
+
+    - name: Run DataProf Analysis (should warn)
+      id: dataprof-bad
+      uses: ./
+      with:
+        file: 'test_data/bad_data.csv'
+        quality-threshold: 95
+        fail-on-issues: false
+        output-format: json
+      continue-on-error: true
+
+    - name: Verify Warning Issued
+      run: |
+        score="${{ steps.dataprof-bad.outputs.quality-score }}"
+        echo "Quality Score: ${score}%"
+
+        if (( $(echo "$score < 95" | bc -l) )); then
+          echo "✅ Quality gate correctly identified low quality data"
+        else
+          echo "❌ Expected low quality score for bad data"
+          exit 1
+        fi
