@@ -367,41 +367,41 @@ runs:
           exit 1
         fi
 
-        # Check if this is batch output (array) or single file output (object)
-        if [[ "$batch_mode" == "true" ]] && jq -e 'type == "array"' "$output_file" >/dev/null 2>&1; then
+        # Check if this is batch output (object with summary, file_reports) or single file output
+        if [[ "$batch_mode" == "true" ]] && jq -e '.summary and .file_reports' "$output_file" >/dev/null 2>&1; then
           echo "::notice::Parsing BATCH mode results"
 
-          # Count files analyzed
-          files_analyzed=$(jq 'length' "$output_file" 2>/dev/null || echo "0")
+          # Batch JSON structure: {summary: {...}, file_reports: [...], errors: [...]}
 
-          # Aggregate dimension scores across all files
-          completeness=$(jq '[.[].data_quality_metrics.completeness.complete_records_ratio // 0] | add / length' "$output_file" 2>/dev/null || echo "0")
-          uniqueness=$(jq '[.[].data_quality_metrics.uniqueness.key_uniqueness // 0] | add / length' "$output_file" 2>/dev/null || echo "0")
-          consistency=$(jq '[.[].data_quality_metrics.consistency.data_type_consistency // 0] | add / length' "$output_file" 2>/dev/null || echo "0")
+          # Count files analyzed from file_reports array
+          files_analyzed=$(jq '.file_reports | length' "$output_file" 2>/dev/null || echo "0")
+
+          # Quality score is already calculated in the summary
+          quality_score=$(jq -r '.summary.average_quality_score // "0"' "$output_file" 2>/dev/null || echo "0")
+
+          # Aggregate dimension scores across all files from file_reports
+          completeness=$(jq '[.file_reports[].data_quality_metrics.completeness.complete_records_ratio // 0] | add / length' "$output_file" 2>/dev/null || echo "0")
+          uniqueness=$(jq '[.file_reports[].data_quality_metrics.uniqueness.key_uniqueness // 0] | add / length' "$output_file" 2>/dev/null || echo "0")
+          consistency=$(jq '[.file_reports[].data_quality_metrics.consistency.data_type_consistency // 0] | add / length' "$output_file" 2>/dev/null || echo "0")
 
           # Accuracy: average of (100 - outlier_ratio)
-          outlier_avg=$(jq '[.[].data_quality_metrics.accuracy.outlier_ratio // 0] | add / length' "$output_file" 2>/dev/null || echo "0")
+          outlier_avg=$(jq '[.file_reports[].data_quality_metrics.accuracy.outlier_ratio // 0] | add / length' "$output_file" 2>/dev/null || echo "0")
           accuracy=$(awk -v outlier="$outlier_avg" 'BEGIN { printf "%.2f", 100 - outlier }')
 
           # Timeliness: average if available
-          if jq -e '.[0].data_quality_metrics.timeliness' "$output_file" >/dev/null 2>&1; then
-            stale_avg=$(jq '[.[].data_quality_metrics.timeliness.stale_data_ratio // 0] | add / length' "$output_file" 2>/dev/null || echo "0")
+          if jq -e '.file_reports[0].data_quality_metrics.timeliness' "$output_file" >/dev/null 2>&1; then
+            stale_avg=$(jq '[.file_reports[].data_quality_metrics.timeliness.stale_data_ratio // 0] | add / length' "$output_file" 2>/dev/null || echo "0")
             timeliness=$(awk -v stale="$stale_avg" 'BEGIN { printf "%.2f", 100 - stale }')
           else
             timeliness="100.0"
           fi
 
-          # Calculate average quality score using ISO 8000/25012 weighted formula
-          # Completeness: 30%, Consistency: 25%, Uniqueness: 20%, Accuracy: 15%, Timeliness: 10%
-          quality_score=$(awk -v comp="$completeness" -v cons="$consistency" -v uniq="$uniqueness" -v acc="$accuracy" -v time="$timeliness" \
-            'BEGIN { printf "%.2f", (comp * 0.3) + (cons * 0.25) + (uniq * 0.2) + (acc * 0.15) + (time * 0.1) }')
-
           validity="$consistency"
 
           # Total issues across all files
-          duplicate_rows=$(jq '[.[].data_quality_metrics.uniqueness.duplicate_rows // 0] | add' "$output_file" 2>/dev/null || echo "0")
-          format_violations=$(jq '[.[].data_quality_metrics.consistency.format_violations // 0] | add' "$output_file" 2>/dev/null || echo "0")
-          range_violations=$(jq '[.[].data_quality_metrics.accuracy.range_violations // 0] | add' "$output_file" 2>/dev/null || echo "0")
+          duplicate_rows=$(jq '[.file_reports[].data_quality_metrics.uniqueness.duplicate_rows // 0] | add' "$output_file" 2>/dev/null || echo "0")
+          format_violations=$(jq '[.file_reports[].data_quality_metrics.consistency.format_violations // 0] | add' "$output_file" 2>/dev/null || echo "0")
+          range_violations=$(jq '[.file_reports[].data_quality_metrics.accuracy.range_violations // 0] | add' "$output_file" 2>/dev/null || echo "0")
           issues_count=$(awk -v dup="$duplicate_rows" -v fmt="$format_violations" -v range="$range_violations" 'BEGIN { print dup + fmt + range }')
 
           file_path="${{ inputs.file }}"
@@ -521,8 +521,15 @@ runs:
       File: ${file_path}"
       fi
 
-      # Get JSON export path from environment if set
-      json_export="${JSON_EXPORT_PATH:-}"
+      # Get JSON export path - prioritize environment variable set during export, fallback to input
+      if [[ -n "${JSON_EXPORT_PATH:-}" ]]; then
+        json_export="$JSON_EXPORT_PATH"
+      elif [[ -n "${{ inputs.export-json-path }}" ]]; then
+        # If export was requested but file doesn't exist yet, still report the expected path
+        json_export="${{ inputs.export-json-path }}"
+      else
+        json_export=""
+      fi
 
       # Set GitHub outputs safely
       {
