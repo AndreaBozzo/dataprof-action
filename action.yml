@@ -305,9 +305,13 @@ runs:
         [[ "${{ inputs.recursive }}" == "true" ]] && cmd_args+=("--recursive")
         [[ "${{ inputs.parallel }}" == "true" ]] && cmd_args+=("--parallel")
 
-        # Set output format for batch
+        # Set output format for batch - use --output to get clean JSON/CSV
         if [[ "${{ inputs.output-format }}" == "json" ]]; then
-          cmd_args+=("--format" "json")
+          cmd_args+=("--format" "json" "--output" "$output_file")
+        elif [[ "${{ inputs.output-format }}" == "csv" ]]; then
+          cmd_args+=("--format" "csv" "--output" "$output_file")
+        else
+          cmd_args+=("--format" "text" "--output" "$output_file")
         fi
 
       else
@@ -319,15 +323,21 @@ runs:
           "$file_input"
         )
 
-        # Set output format
+        # Set output format and use --output flag to avoid stdout contamination
         if [[ "${{ inputs.output-format }}" == "json" ]]; then
-          cmd_args+=("--format" "json")
+          cmd_args+=("--format" "json" "--output" "$output_file")
+        elif [[ "${{ inputs.output-format }}" == "csv" ]]; then
+          cmd_args+=("--format" "csv" "--output" "$output_file")
+        else
+          # For text/plain, still use --output to capture clean output
+          cmd_args+=("--format" "text" "--output" "$output_file")
         fi
       fi
 
       echo "::notice::Executing: $DATAPROF_BIN ${cmd_args[*]}"
 
-      if ! "$DATAPROF_BIN" "${cmd_args[@]}" > "$output_file" 2>&1; then
+      # Run command - output goes to file via --output flag, errors to stderr
+      if ! "$DATAPROF_BIN" "${cmd_args[@]}" 2>&1; then
         exit_code=$?
         echo "::error::Analysis failed with exit code $exit_code"
         echo "::group::Error output"
