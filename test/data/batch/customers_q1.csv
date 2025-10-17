@@ -1,0 +1,6 @@
+id,name,email,country,revenue,signup_date
+1,Alpha Corp,alpha@corp.com,USA,50000,2024-01-15
+2,Beta Inc,beta@inc.com,UK,35000,2024-02-20
+3,Gamma LLC,gamma@llc.com,Canada,45000,2024-03-10
+4,Delta Ltd,delta@ltd.com,Germany,62000,2024-01-25
+5,Epsilon Co,epsilon@co.com,France,38000,2024-02-14

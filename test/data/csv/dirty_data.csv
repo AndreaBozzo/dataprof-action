@@ -1,0 +1,16 @@
+id,name,email,age,salary,department,hire_date,status,performance_score
+1,Alice Johnson,alice.johnson@company.com,28,65000,Engineering,2020-01-15,active,92
+2,Bob Smith,,34,72000,Marketing,2019-03-22,active,88
+3,Carol White,carol.white@company.com,999,85000,Sales,invalid-date,active,95
+4,David Brown,david.brown@company.com,31,-5000,Engineering,2021-02-01,active,150
+5,,emma@invalid,29,63000,Marketing,2020-11-05,active,87
+6,Frank Miller,frank.miller@company.com,38,71000,,2019-09-12,active,91
+7,Grace Wilson,grace.wilson@company.com,45,79000,Engineering,2017-05-20,,93
+8,Henry Moore,,33,66000,Marketing,2020-06-18,active,
+9,Ivy Taylor,ivy.taylor@company.com,27,61000,Sales,2021-04-30,active,89
+10,,jack.anderson@company.com,36,74000,Engineering,2018-12-08,active,94
+1,Duplicate ID,duplicate@test.com,25,50000,Sales,2022-01-01,active,80
+2,Another Duplicate,another@test.com,30,55000,Marketing,2022-02-01,inactive,75
+13,Maria Garcia,maria.garcia@company.com,,73000,Engineering,2019-02-28,active,92
+14,Nathan Lee,nathan.lee@company.com,29,,Sales,2021-01-20,active,88
+15,Olivia Martinez,,37,76000,Marketing,2018-11-03,active,

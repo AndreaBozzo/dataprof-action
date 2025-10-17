@@ -1,5 +1,5 @@
 name: 'DataProf Data Quality Assessment'
-description: 'Analyze CSV files for data quality with dataprof. Comprehensive quality metrics and quality gates for CI/CD workflows.'
+description: 'Analyze CSV, JSON, and Parquet files for data quality with dataprof. Comprehensive quality metrics and quality gates for CI/CD workflows with batch processing support.'
 author: 'Andrea Bozzo'
 
 branding:
@@ -8,8 +8,23 @@ branding:
 
 inputs:
   file:
-    description: 'Path to the CSV file to analyze for data quality'
+    description: 'Path to file(s) to analyze. Single file path or glob pattern (e.g., data/**/*.csv). Supports CSV, JSON, and Parquet formats.'
     required: true
+
+  batch-mode:
+    description: 'Enable batch processing mode for analyzing multiple files'
+    required: false
+    default: 'false'
+
+  recursive:
+    description: 'Recursively process directories when batch-mode is enabled'
+    required: false
+    default: 'false'
+
+  parallel:
+    description: 'Enable parallel processing for batch mode (faster for multiple files)'
+    required: false
+    default: 'true'
 
   quality-threshold:
     description: 'Overall quality score threshold (0-100). Job fails if score is below this value'
@@ -22,12 +37,17 @@ inputs:
     default: 'true'
 
   output-format:
-    description: 'Output format for analysis results (json, csv, text)'
+    description: 'Output format for analysis results (json, csv, text). JSON recommended for detailed export.'
     required: false
     default: 'json'
 
+  export-json-path:
+    description: 'Optional path to export detailed JSON results for downstream processing'
+    required: false
+    default: ''
+
   dataprof-version:
-    description: 'Version of dataprof to use (latest, or specific version like v0.4.6)'
+    description: 'Version of dataprof to use (latest, or specific version like v0.4.77)'
     required: false
     default: 'latest'
 
@@ -69,8 +89,20 @@ outputs:
     value: ${{ steps.quality-analysis.outputs.issues-count }}
 
   file-path:
-    description: 'Path of the analyzed file'
+    description: 'Path of the analyzed file(s)'
     value: ${{ steps.quality-analysis.outputs.file-path }}
+
+  files-analyzed:
+    description: 'Number of files analyzed (useful in batch mode)'
+    value: ${{ steps.quality-analysis.outputs.files-analyzed }}
+
+  json-export-path:
+    description: 'Path to exported JSON file (if export-json-path was specified)'
+    value: ${{ steps.quality-analysis.outputs.json-export-path }}
+
+  batch-summary:
+    description: 'Summary of batch processing results (when batch-mode is enabled)'
+    value: ${{ steps.quality-analysis.outputs.batch-summary }}
 
   analysis-summary:
     description: 'Human-readable analysis summary'
@@ -86,20 +118,46 @@ runs:
 
       echo "::group::Validating inputs"
 
-      # Validate file existence and readability
-      if [[ ! -f "${{ inputs.file }}" ]]; then
-        echo "::error file=${{ inputs.file }}::File not found"
-        exit 1
-      fi
+      batch_mode="${{ inputs.batch-mode }}"
+      file_input="${{ inputs.file }}"
 
-      if [[ ! -r "${{ inputs.file }}" ]]; then
-        echo "::error file=${{ inputs.file }}::File is not readable"
-        exit 1
-      fi
+      # Validate based on batch mode
+      if [[ "$batch_mode" == "true" ]]; then
+        echo "::notice::Batch mode enabled - validating directory/pattern"
 
-      # Check file extension (warning only)
-      if [[ ! "${{ inputs.file }}" =~ \.(csv|CSV)$ ]]; then
-        echo "::warning file=${{ inputs.file }}::File does not have .csv extension, proceeding anyway"
+        # Check if input is a directory or contains glob pattern
+        if [[ -d "$file_input" ]]; then
+          echo "✅ Directory input detected: $file_input"
+        elif [[ "$file_input" == *"*"* ]] || [[ "$file_input" == *"?"* ]]; then
+          echo "✅ Glob pattern detected: $file_input"
+        else
+          # Single file in batch mode is still valid
+          if [[ ! -f "$file_input" ]]; then
+            echo "::error::In batch mode, input must be a directory, glob pattern, or existing file"
+            exit 1
+          fi
+          echo "✅ Single file in batch mode: $file_input"
+        fi
+      else
+        echo "::notice::Single file mode - validating file"
+
+        # Validate file existence and readability
+        if [[ ! -f "$file_input" ]]; then
+          echo "::error file=$file_input::File not found"
+          exit 1
+        fi
+
+        if [[ ! -r "$file_input" ]]; then
+          echo "::error file=$file_input::File is not readable"
+          exit 1
+        fi
+
+        # Check file extension and format support
+        if [[ "$file_input" =~ \.(csv|CSV|json|JSON|parquet|PARQUET)$ ]]; then
+          echo "✅ Supported file format detected"
+        else
+          echo "::warning file=$file_input::File extension not recognized. Supported: .csv, .json, .parquet"
+        fi
       fi
 
       # Validate threshold is numeric and in range
@@ -198,24 +256,64 @@ runs:
       }
       trap cleanup EXIT
 
-      # Build command array - dataprof uses 'analyze' subcommand
-      cmd_args=(
-        "analyze"
-        "${{ inputs.file }}"
-        "--format" "${{ inputs.output-format }}"
-      )
-
-      # Add detailed flag for comprehensive output
-      if [[ "${{ inputs.output-format }}" == "json" ]]; then
-        cmd_args+=("--detailed")
-      fi
-
       # Determine dataprof binary name
-      # The binary is always named 'dataprof-cli' (with .exe on Windows)
       if [[ "$RUNNER_OS" == "Windows" ]] || [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
         DATAPROF_BIN="dataprof-cli.exe"
       else
         DATAPROF_BIN="dataprof-cli"
+      fi
+
+      batch_mode="${{ inputs.batch-mode }}"
+      file_input="${{ inputs.file }}"
+      export_path="${{ inputs.export-json-path }}"
+
+      # Build command based on mode
+      if [[ "$batch_mode" == "true" ]]; then
+        echo "::notice::Running in BATCH mode"
+
+        # Build batch command
+        cmd_args=("batch")
+
+        # Handle directory vs glob pattern
+        if [[ -d "$file_input" ]]; then
+          cmd_args+=("$file_input")
+        else
+          # For glob patterns, we need to expand them
+          # Use the parent directory and let dataprof handle filtering
+          parent_dir=$(dirname "$file_input")
+          if [[ -d "$parent_dir" ]]; then
+            cmd_args+=("$parent_dir")
+          else
+            cmd_args+=(".")
+          fi
+        fi
+
+        # Add batch-specific flags
+        [[ "${{ inputs.recursive }}" == "true" ]] && cmd_args+=("--recursive")
+        [[ "${{ inputs.parallel }}" == "true" ]] && cmd_args+=("--parallel")
+
+        # Output format
+        cmd_args+=("--format" "${{ inputs.output-format }}")
+
+        # For JSON, always add detailed flag
+        if [[ "${{ inputs.output-format }}" == "json" ]]; then
+          cmd_args+=("--detailed")
+        fi
+
+      else
+        echo "::notice::Running in SINGLE FILE mode"
+
+        # Build analyze command
+        cmd_args=(
+          "analyze"
+          "$file_input"
+          "--format" "${{ inputs.output-format }}"
+        )
+
+        # Add detailed flag for comprehensive output
+        if [[ "${{ inputs.output-format }}" == "json" ]]; then
+          cmd_args+=("--detailed")
+        fi
       fi
 
       echo "::notice::Executing: $DATAPROF_BIN ${cmd_args[*]}"
@@ -229,10 +327,22 @@ runs:
         exit $exit_code
       fi
 
+      # Export JSON if requested
+      if [[ -n "$export_path" ]] && [[ "${{ inputs.output-format }}" == "json" ]]; then
+        echo "::notice::Exporting JSON to $export_path"
+        mkdir -p "$(dirname "$export_path")"
+        cp "$output_file" "$export_path"
+        echo "JSON_EXPORT_PATH=$export_path" >> "$GITHUB_ENV"
+      fi
+
       echo "Analysis completed successfully"
       echo "::endgroup::"
 
       echo "::group::Parsing analysis results"
+
+      batch_mode="${{ inputs.batch-mode }}"
+      files_analyzed="1"
+      batch_summary=""
 
       # Parse based on output format
       if [[ "${{ inputs.output-format }}" == "json" ]]; then
@@ -248,11 +358,87 @@ runs:
           exit 1
         fi
 
-        # Extract metrics from ACTUAL dataprof JSON structure
-        # Overall quality score
-        quality_score=$(jq -r '.quality.quality_score // .summary.data_quality_score // "0"' "$output_file" 2>/dev/null || echo "0")
+        # Check if this is batch output (array) or single file output (object)
+        if [[ "$batch_mode" == "true" ]] && jq -e 'type == "array"' "$output_file" >/dev/null 2>&1; then
+          echo "::notice::Parsing BATCH mode results"
 
-        # Calculate quality level from score
+          # Count files analyzed
+          files_analyzed=$(jq 'length' "$output_file" 2>/dev/null || echo "0")
+
+          # Aggregate metrics across all files
+          # Average quality score
+          quality_score=$(jq '[.[].quality.quality_score // .[].summary.data_quality_score // 0] | add / length' "$output_file" 2>/dev/null || echo "0")
+
+          # Aggregate dimension scores
+          completeness=$(jq '[.[].data_quality_metrics.completeness.complete_records_ratio // 0] | add / length' "$output_file" 2>/dev/null || echo "0")
+          uniqueness=$(jq '[.[].data_quality_metrics.uniqueness.key_uniqueness // 0] | add / length' "$output_file" 2>/dev/null || echo "0")
+          consistency=$(jq '[.[].data_quality_metrics.consistency.data_type_consistency // 0] | add / length' "$output_file" 2>/dev/null || echo "0")
+
+          # Accuracy: average of (100 - outlier_ratio)
+          outlier_avg=$(jq '[.[].data_quality_metrics.accuracy.outlier_ratio // 0] | add / length' "$output_file" 2>/dev/null || echo "0")
+          accuracy=$(awk -v outlier="$outlier_avg" 'BEGIN { printf "%.2f", 100 - outlier }')
+
+          # Timeliness: average if available
+          if jq -e '.[0].data_quality_metrics.timeliness' "$output_file" >/dev/null 2>&1; then
+            stale_avg=$(jq '[.[].data_quality_metrics.timeliness.stale_data_ratio // 0] | add / length' "$output_file" 2>/dev/null || echo "0")
+            timeliness=$(awk -v stale="$stale_avg" 'BEGIN { printf "%.2f", 100 - stale }')
+          else
+            timeliness="100.0"
+          fi
+
+          validity="$consistency"
+
+          # Total issues across all files
+          duplicate_rows=$(jq '[.[].data_quality_metrics.uniqueness.duplicate_rows // 0] | add' "$output_file" 2>/dev/null || echo "0")
+          format_violations=$(jq '[.[].data_quality_metrics.consistency.format_violations // 0] | add' "$output_file" 2>/dev/null || echo "0")
+          range_violations=$(jq '[.[].data_quality_metrics.accuracy.range_violations // 0] | add' "$output_file" 2>/dev/null || echo "0")
+          issues_count=$(awk -v dup="$duplicate_rows" -v fmt="$format_violations" -v range="$range_violations" 'BEGIN { print dup + fmt + range }')
+
+          file_path="${{ inputs.file }}"
+
+          # Create batch summary
+          batch_summary="Analyzed $files_analyzed files | Avg Quality: ${quality_score}% | Total Issues: $issues_count"
+
+          echo "Batch JSON results parsed successfully"
+
+        else
+          echo "::notice::Parsing SINGLE FILE mode results"
+
+          # Extract metrics from ACTUAL dataprof JSON structure
+          # Overall quality score
+          quality_score=$(jq -r '.quality.quality_score // .summary.data_quality_score // "0"' "$output_file" 2>/dev/null || echo "0")
+
+          # Extract individual dimension scores from data_quality_metrics
+          completeness=$(jq -r '.data_quality_metrics.completeness.complete_records_ratio // "0"' "$output_file" 2>/dev/null || echo "0")
+          uniqueness=$(jq -r '.data_quality_metrics.uniqueness.key_uniqueness // "0"' "$output_file" 2>/dev/null || echo "0")
+          consistency=$(jq -r '.data_quality_metrics.consistency.data_type_consistency // "0"' "$output_file" 2>/dev/null || echo "0")
+
+          # Accuracy score (100 - outlier_ratio)
+          outlier_ratio=$(jq -r '.data_quality_metrics.accuracy.outlier_ratio // "0"' "$output_file" 2>/dev/null || echo "0")
+          accuracy=$(awk -v outlier="$outlier_ratio" 'BEGIN { printf "%.2f", 100 - outlier }')
+
+          # Timeliness score - Check if timeliness metrics exist in JSON
+          if jq -e '.data_quality_metrics.timeliness' "$output_file" >/dev/null 2>&1; then
+            stale_ratio=$(jq -r '.data_quality_metrics.timeliness.stale_data_ratio // "0"' "$output_file" 2>/dev/null || echo "0")
+            timeliness=$(awk -v stale="$stale_ratio" 'BEGIN { printf "%.2f", 100 - stale }')
+          else
+            timeliness="100.0"
+          fi
+
+          validity="$consistency"
+
+          # Count issues from all dimensions
+          duplicate_rows=$(jq -r '.data_quality_metrics.uniqueness.duplicate_rows // "0"' "$output_file" 2>/dev/null || echo "0")
+          format_violations=$(jq -r '.data_quality_metrics.consistency.format_violations // "0"' "$output_file" 2>/dev/null || echo "0")
+          range_violations=$(jq -r '.data_quality_metrics.accuracy.range_violations // "0"' "$output_file" 2>/dev/null || echo "0")
+          issues_count=$(awk -v dup="$duplicate_rows" -v fmt="$format_violations" -v range="$range_violations" 'BEGIN { print dup + fmt + range }')
+
+          file_path="${{ inputs.file }}"
+
+          echo "Single file JSON results parsed successfully"
+        fi
+
+        # Calculate quality level from score (common for both modes)
         if awk -v score="$quality_score" 'BEGIN { exit !(score >= 90) }'; then
           quality_level="EXCELLENT"
         elif awk -v score="$quality_score" 'BEGIN { exit !(score >= 75) }'; then
@@ -263,41 +449,6 @@ runs:
           quality_level="POOR"
         fi
 
-        # Extract individual dimension scores from data_quality_metrics
-        # Completeness score (from complete_records_ratio)
-        completeness=$(jq -r '.data_quality_metrics.completeness.complete_records_ratio // "0"' "$output_file" 2>/dev/null || echo "0")
-
-        # Uniqueness score (from key_uniqueness)
-        uniqueness=$(jq -r '.data_quality_metrics.uniqueness.key_uniqueness // "0"' "$output_file" 2>/dev/null || echo "0")
-
-        # Consistency score (from data_type_consistency)
-        consistency=$(jq -r '.data_quality_metrics.consistency.data_type_consistency // "0"' "$output_file" 2>/dev/null || echo "0")
-
-        # Accuracy score (100 - outlier_ratio)
-        outlier_ratio=$(jq -r '.data_quality_metrics.accuracy.outlier_ratio // "0"' "$output_file" 2>/dev/null || echo "0")
-        accuracy=$(awk -v outlier="$outlier_ratio" 'BEGIN { printf "%.2f", 100 - outlier }')
-
-        # Timeliness score - Check if timeliness metrics exist in JSON
-        if jq -e '.data_quality_metrics.timeliness' "$output_file" >/dev/null 2>&1; then
-          stale_ratio=$(jq -r '.data_quality_metrics.timeliness.stale_data_ratio // "0"' "$output_file" 2>/dev/null || echo "0")
-          timeliness=$(awk -v stale="$stale_ratio" 'BEGIN { printf "%.2f", 100 - stale }')
-        else
-          # Timeliness not available in this version, default to 100 (no timeliness issues)
-          timeliness="100.0"
-        fi
-
-        # Validity is not a separate dimension in ISO 8000/25012, use consistency as proxy
-        validity="$consistency"
-
-        # Count issues from all dimensions
-        duplicate_rows=$(jq -r '.data_quality_metrics.uniqueness.duplicate_rows // "0"' "$output_file" 2>/dev/null || echo "0")
-        format_violations=$(jq -r '.data_quality_metrics.consistency.format_violations // "0"' "$output_file" 2>/dev/null || echo "0")
-        range_violations=$(jq -r '.data_quality_metrics.accuracy.range_violations // "0"' "$output_file" 2>/dev/null || echo "0")
-        issues_count=$(awk -v dup="$duplicate_rows" -v fmt="$format_violations" -v range="$range_violations" 'BEGIN { print dup + fmt + range }')
-
-        file_path="${{ inputs.file }}"
-
-        echo "JSON results parsed successfully"
       else
         # Basic text parsing for non-JSON formats
         if grep -q "Overall Quality Score:" "$output_file"; then
@@ -332,7 +483,21 @@ runs:
       fi
 
       # Create structured analysis summary
-      analysis_summary="Data Quality Analysis Results:
+      if [[ "$batch_mode" == "true" ]]; then
+        analysis_summary="Data Quality Analysis Results (Batch Mode):
+      Files Analyzed: ${files_analyzed}
+      Overall Score: ${quality_score}% (averaged)
+      Quality Level: ${quality_level}
+      Completeness: ${completeness}%
+      Uniqueness: ${uniqueness}%
+      Validity: ${validity}%
+      Consistency: ${consistency}%
+      Timeliness: ${timeliness}%
+      Accuracy: ${accuracy}%
+      Total Issues Found: ${issues_count}
+      Input: ${file_path}"
+      else
+        analysis_summary="Data Quality Analysis Results:
       Overall Score: ${quality_score}%
       Quality Level: ${quality_level}
       Completeness: ${completeness}%
@@ -343,6 +508,10 @@ runs:
       Accuracy: ${accuracy}%
       Issues Found: ${issues_count}
       File: ${file_path}"
+      fi
+
+      # Get JSON export path from environment if set
+      json_export="${JSON_EXPORT_PATH:-}"
 
       # Set GitHub outputs safely
       {
@@ -356,6 +525,8 @@ runs:
         echo "accuracy-score=$accuracy"
         echo "issues-count=$issues_count"
         echo "file-path=$file_path"
+        echo "files-analyzed=$files_analyzed"
+        echo "json-export-path=$json_export"
       } >> "$GITHUB_OUTPUT"
 
       # Set multiline outputs using heredoc syntax
@@ -364,6 +535,17 @@ runs:
         echo "$analysis_summary"
         echo "EOF_SUMMARY"
       } >> "$GITHUB_OUTPUT"
+
+      # Batch summary (if applicable)
+      if [[ -n "$batch_summary" ]]; then
+        {
+          echo "batch-summary<<EOF_BATCH"
+          echo "$batch_summary"
+          echo "EOF_BATCH"
+        } >> "$GITHUB_OUTPUT"
+      else
+        echo "batch-summary=" >> "$GITHUB_OUTPUT"
+      fi
 
       # Store for threshold validation
       {
@@ -432,6 +614,9 @@ runs:
       issues_count="${{ steps.quality-analysis.outputs.issues-count }}"
       quality_level="${{ steps.quality-analysis.outputs.quality-level }}"
       file_path="${{ steps.quality-analysis.outputs.file-path }}"
+      files_analyzed="${{ steps.quality-analysis.outputs.files-analyzed }}"
+      batch_mode="${{ inputs.batch-mode }}"
+      json_export="${{ steps.quality-analysis.outputs.json-export-path }}"
 
       next_steps="- Excellent! Your data quality is high
       - No critical issues detected
@@ -446,6 +631,13 @@ runs:
       {
         echo "# DataProf Data Quality Analysis"
         echo ""
+
+        # Add batch mode indicator if applicable
+        if [[ "$batch_mode" == "true" ]]; then
+          echo "> **Batch Mode** | Analyzed **${files_analyzed}** file(s)"
+          echo ""
+        fi
+
         echo "## Results Summary"
         echo ""
         echo "| Metric | Score |"
@@ -467,9 +659,24 @@ runs:
         echo ""
         echo "## Analysis Details"
         echo ""
-        echo "- **File**: \`${file_path}\`"
+
+        if [[ "$batch_mode" == "true" ]]; then
+          echo "- **Mode**: Batch Processing"
+          echo "- **Files Analyzed**: ${files_analyzed}"
+          echo "- **Input Pattern**: \`${file_path}\`"
+        else
+          echo "- **Mode**: Single File"
+          echo "- **File**: \`${file_path}\`"
+        fi
+
         echo "- **Output Format**: ${output_format}"
         echo "- **DataProf Version**: ${dataprof_version}"
+
+        # Show JSON export path if available
+        if [[ -n "$json_export" ]]; then
+          echo "- **JSON Export**: \`${json_export}\`"
+        fi
+
         echo ""
         echo "## Next Steps"
         echo ""

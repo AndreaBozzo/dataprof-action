@@ -1,0 +1,7 @@
+[
+  {"id": 101, "name": "Office Chair", "price": 299.99, "stock": 40, "category": "seating"},
+  {"id": 102, "name": "Standing Desk", "price": 599.99, "stock": 25, "category": "desks"},
+  {"id": 103, "name": "Bookshelf", "price": 149.99, "stock": 30, "category": "storage"},
+  {"id": 104, "name": "File Cabinet", "price": 199.99, "stock": null, "category": "storage"},
+  {"id": 105, "name": "Desk Lamp", "price": 49.99, "stock": 80, "category": "lighting"}
+]

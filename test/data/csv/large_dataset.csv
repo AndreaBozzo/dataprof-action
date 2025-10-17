@@ -1,0 +1,31 @@
+id,product_name,category,price,quantity,supplier,rating,in_stock,last_updated
+1,Laptop Pro 15,Electronics,1299.99,45,TechCorp,4.5,true,2024-01-15
+2,Wireless Mouse,Electronics,29.99,150,AccessoryHub,4.2,true,2024-01-16
+3,Office Chair Deluxe,Furniture,399.99,30,ComfortSeating,4.7,true,2024-01-14
+4,Standing Desk,Furniture,599.99,20,ErgoOffice,4.6,true,2024-01-15
+5,USB-C Hub,Electronics,49.99,200,TechCorp,4.3,true,2024-01-17
+6,Monitor 27inch,Electronics,349.99,75,DisplayPro,4.8,true,2024-01-16
+7,Keyboard Mechanical,Electronics,129.99,100,KeyMasters,4.6,true,2024-01-15
+8,Desk Lamp LED,Furniture,79.99,90,LightWorks,4.4,true,2024-01-14
+9,Notebook A4,Stationery,12.99,500,PaperPlus,4.1,true,2024-01-17
+10,Pen Set Premium,Stationery,24.99,300,WriteRight,4.3,true,2024-01-16
+11,External SSD 1TB,Electronics,159.99,60,StorageKing,4.7,true,2024-01-15
+12,Webcam HD,Electronics,89.99,80,TechCorp,4.4,true,2024-01-14
+13,Headphones Wireless,Electronics,199.99,95,AudioMax,4.6,true,2024-01-17
+14,Desk Organizer,Furniture,34.99,120,OrganizePro,4.2,true,2024-01-16
+15,Mouse Pad XXL,Electronics,19.99,250,AccessoryHub,4.0,true,2024-01-15
+16,Phone Stand,Electronics,15.99,400,TechCorp,4.1,true,2024-01-14
+17,Cable Management,Electronics,29.99,180,OrganizePro,4.3,true,2024-01-17
+18,Monitor Arm,Furniture,149.99,40,ErgoOffice,4.5,true,2024-01-16
+19,Laptop Stand,Electronics,59.99,110,AccessoryHub,4.4,true,2024-01-15
+20,Power Strip Smart,Electronics,44.99,140,TechCorp,4.6,true,2024-01-14
+21,Filing Cabinet,Furniture,299.99,25,OfficeMax,4.3,true,2024-01-17
+22,Whiteboard Large,Furniture,199.99,35,BoardWorks,4.5,true,2024-01-16
+23,Markers Set,Stationery,14.99,350,WriteRight,4.2,true,2024-01-15
+24,Paper Shredder,Electronics,129.99,45,SecureDoc,4.4,true,2024-01-14
+25,Desk Calendar,Stationery,9.99,600,PaperPlus,4.0,true,2024-01-17
+26,Book Stand,Furniture,24.99,200,ReadEase,4.1,true,2024-01-16
+27,USB Flash Drive 128GB,Electronics,24.99,300,StorageKing,4.3,true,2024-01-15
+28,Printer Wireless,Electronics,249.99,50,PrintPro,4.5,true,2024-01-14
+29,Scanner Portable,Electronics,179.99,55,ScanTech,4.4,true,2024-01-17
+30,Projector Mini,Electronics,399.99,30,DisplayPro,4.7,true,2024-01-16

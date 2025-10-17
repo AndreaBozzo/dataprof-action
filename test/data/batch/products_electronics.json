@@ -1,0 +1,7 @@
+[
+  {"id": 1, "name": "Laptop", "price": 999.99, "stock": 50, "category": "computers"},
+  {"id": 2, "name": "Mouse", "price": 29.99, "stock": 200, "category": "accessories"},
+  {"id": 3, "name": "Keyboard", "price": 79.99, "stock": 150, "category": "accessories"},
+  {"id": 4, "name": "Monitor", "price": 299.99, "stock": 75, "category": "displays"},
+  {"id": 5, "name": "Webcam", "price": 89.99, "stock": 100, "category": "accessories"}
+]

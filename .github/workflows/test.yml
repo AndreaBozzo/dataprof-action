@@ -8,9 +8,9 @@ on:
   workflow_dispatch:
 
 jobs:
-  test-action:
+  test-csv-single:
     runs-on: ubuntu-latest
-    name: Test Data Quality Analysis
+    name: Test CSV Single File Analysis
 
     steps:
     - name: Checkout repository
@@ -131,3 +131,161 @@ jobs:
         fi
 
         echo "✅ Low quality data detection test passed"
+
+  test-json-format:
+    runs-on: ubuntu-latest
+    name: Test JSON File Analysis
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Create JSON test data
+      run: |
+        mkdir -p test_data
+        cat > test_data/sample.json << 'EOF'
+        [
+          {"id": 1, "name": "Alice", "email": "alice@test.com", "age": 28, "score": 95},
+          {"id": 2, "name": "Bob", "email": "bob@test.com", "age": 34, "score": 87},
+          {"id": 3, "name": "Carol", "email": "", "age": 42, "score": 92},
+          {"id": 4, "name": "David", "email": "david@test.com", "age": 31, "score": 88},
+          {"id": 5, "name": "Emma", "email": "emma@test.com", "age": 29, "score": 91}
+        ]
+        EOF
+
+    - name: Run DataProf Analysis on JSON
+      id: json-test
+      uses: ./
+      with:
+        file: 'test_data/sample.json'
+        quality-threshold: 70
+        fail-on-issues: false
+        output-format: json
+
+    - name: Validate JSON Analysis
+      run: |
+        score="${{ steps.json-test.outputs.quality-score }}"
+
+        if [[ -z "$score" ]]; then
+          echo "❌ No quality score returned for JSON file"
+          exit 1
+        fi
+
+        echo "✅ JSON file analysis successful"
+        echo "Quality score: ${score}%"
+
+  test-json-export:
+    runs-on: ubuntu-latest
+    name: Test JSON Export Feature
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Create test data
+      run: |
+        mkdir -p test_data
+        cat > test_data/export_test.csv << 'EOF'
+        id,value,status
+        1,100,active
+        2,200,active
+        3,150,inactive
+        EOF
+
+    - name: Run Analysis with JSON Export
+      id: export-test
+      uses: ./
+      with:
+        file: 'test_data/export_test.csv'
+        quality-threshold: 70
+        export-json-path: 'output/quality_report.json'
+
+    - name: Validate JSON Export
+      run: |
+        export_path="${{ steps.export-test.outputs.json-export-path }}"
+
+        if [[ -z "$export_path" ]]; then
+          echo "❌ No export path returned"
+          exit 1
+        fi
+
+        if [[ ! -f "$export_path" ]]; then
+          echo "❌ Export file not found at: $export_path"
+          exit 1
+        fi
+
+        # Validate it's valid JSON
+        if ! jq empty "$export_path" 2>/dev/null; then
+          echo "❌ Exported file is not valid JSON"
+          exit 1
+        fi
+
+        echo "✅ JSON export successful"
+        echo "Export path: $export_path"
+
+  test-batch-mode:
+    runs-on: ubuntu-latest
+    name: Test Batch Processing Mode
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Create multiple test files
+      run: |
+        mkdir -p test_data/batch
+
+        # Create multiple CSV files
+        cat > test_data/batch/file1.csv << 'EOF'
+        id,name,value
+        1,Alice,100
+        2,Bob,200
+        3,Carol,150
+        EOF
+
+        cat > test_data/batch/file2.csv << 'EOF'
+        id,name,value
+        4,David,250
+        5,Emma,180
+        6,Frank,220
+        EOF
+
+        cat > test_data/batch/file3.csv << 'EOF'
+        id,name,value
+        7,Grace,190
+        8,Henry,210
+        9,Ivy,175
+        EOF
+
+    - name: Run Batch Analysis
+      id: batch-test
+      uses: ./
+      with:
+        file: 'test_data/batch/'
+        batch-mode: true
+        recursive: false
+        parallel: true
+        quality-threshold: 70
+        fail-on-issues: false
+
+    - name: Validate Batch Results
+      run: |
+        files_analyzed="${{ steps.batch-test.outputs.files-analyzed }}"
+        batch_summary="${{ steps.batch-test.outputs.batch-summary }}"
+
+        echo "Files Analyzed: $files_analyzed"
+        echo "Batch Summary: $batch_summary"
+
+        # Should have analyzed 3 files
+        if [[ "$files_analyzed" -lt 1 ]]; then
+          echo "❌ Expected at least 1 file to be analyzed, got: $files_analyzed"
+          exit 1
+        fi
+
+        if [[ -z "$batch_summary" ]]; then
+          echo "❌ No batch summary returned"
+          exit 1
+        fi
+
+        echo "✅ Batch processing successful"
+        echo "Analyzed $files_analyzed file(s)"

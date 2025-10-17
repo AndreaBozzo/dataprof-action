@@ -1,0 +1,44 @@
+[
+  {
+    "id": 1,
+    "name": "Complete Record",
+    "email": "complete@test.com",
+    "phone": "+1234567890",
+    "address": "123 Main St"
+  },
+  {
+    "id": 2,
+    "name": "Missing Email",
+    "email": null,
+    "phone": "+1234567891",
+    "address": "456 Oak Ave"
+  },
+  {
+    "id": 3,
+    "name": "Missing Phone",
+    "email": "nophone@test.com",
+    "phone": null,
+    "address": "789 Pine Rd"
+  },
+  {
+    "id": 4,
+    "name": null,
+    "email": "noname@test.com",
+    "phone": "+1234567893",
+    "address": "321 Elm St"
+  },
+  {
+    "id": 5,
+    "name": "Multiple Missing",
+    "email": null,
+    "phone": null,
+    "address": "654 Birch Ln"
+  },
+  {
+    "id": 6,
+    "name": "",
+    "email": "",
+    "phone": "",
+    "address": ""
+  }
+]

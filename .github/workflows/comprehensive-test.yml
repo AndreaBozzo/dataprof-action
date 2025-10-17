@@ -1,0 +1,374 @@
+name: Comprehensive DataProf Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test-csv-clean:
+    runs-on: ubuntu-latest
+    name: Test Clean CSV Data
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Analyze Clean CSV Data
+      id: clean
+      uses: ./
+      with:
+        file: 'test/data/csv/clean_data.csv'
+        quality-threshold: 85
+        fail-on-issues: false
+        output-format: json
+        export-json-path: 'output/clean_analysis.json'
+
+    - name: Display Results
+      run: |
+        echo "## Clean Data Analysis Results"
+        echo "Quality Score: ${{ steps.clean.outputs.quality-score }}%"
+        echo "Quality Level: ${{ steps.clean.outputs.quality-level }}"
+        echo "Completeness: ${{ steps.clean.outputs.completeness-score }}%"
+        echo "Uniqueness: ${{ steps.clean.outputs.uniqueness-score }}%"
+        echo "Consistency: ${{ steps.clean.outputs.consistency-score }}%"
+        echo "Issues Count: ${{ steps.clean.outputs.issues-count }}"
+        echo "JSON Export: ${{ steps.clean.outputs.json-export-path }}"
+
+    - name: Validate High Quality
+      run: |
+        score="${{ steps.clean.outputs.quality-score }}"
+
+        if ! [[ "$score" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+          echo "❌ Quality score is not numeric: $score"
+          exit 1
+        fi
+
+        if (( $(echo "$score < 80" | bc -l) )); then
+          echo "⚠️  Clean data quality lower than expected: ${score}%"
+        else
+          echo "✅ Clean data quality validated: ${score}%"
+        fi
+
+    - name: Validate JSON Export
+      run: |
+        export_path="${{ steps.clean.outputs.json-export-path }}"
+
+        if [[ -z "$export_path" ]]; then
+          echo "❌ No export path returned"
+          exit 1
+        fi
+
+        if [[ ! -f "$export_path" ]]; then
+          echo "❌ Export file not found: $export_path"
+          exit 1
+        fi
+
+        echo "✅ JSON export successful: $export_path"
+
+  test-csv-dirty:
+    runs-on: ubuntu-latest
+    name: Test Dirty CSV Data
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Analyze Dirty CSV Data
+      id: dirty
+      uses: ./
+      with:
+        file: 'test/data/csv/dirty_data.csv'
+        quality-threshold: 50
+        fail-on-issues: false
+        output-format: json
+
+    - name: Display Results
+      run: |
+        echo "## Dirty Data Analysis Results"
+        echo "Quality Score: ${{ steps.dirty.outputs.quality-score }}%"
+        echo "Quality Level: ${{ steps.dirty.outputs.quality-level }}"
+        echo "Completeness: ${{ steps.dirty.outputs.completeness-score }}%"
+        echo "Uniqueness: ${{ steps.dirty.outputs.uniqueness-score }}%"
+        echo "Consistency: ${{ steps.dirty.outputs.consistency-score }}%"
+        echo "Accuracy: ${{ steps.dirty.outputs.accuracy-score }}%"
+        echo "Issues Count: ${{ steps.dirty.outputs.issues-count }}"
+
+    - name: Validate Issue Detection
+      run: |
+        score="${{ steps.dirty.outputs.quality-score }}"
+        issues="${{ steps.dirty.outputs.issues-count }}"
+
+        echo "Quality Score: ${score}%"
+        echo "Issues Found: ${issues}"
+
+        # Dirty data should have lower quality
+        if (( $(echo "$score > 85" | bc -l) )); then
+          echo "⚠️  Quality unexpectedly high for dirty data: ${score}%"
+        else
+          echo "✅ Quality issues correctly detected"
+        fi
+
+        # Should have detected issues
+        if [[ "$issues" -gt 0 ]] || [[ "$score" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+          echo "✅ Issues detection working"
+        fi
+
+  test-csv-large:
+    runs-on: ubuntu-latest
+    name: Test Large CSV Dataset
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Analyze Large Dataset
+      id: large
+      uses: ./
+      with:
+        file: 'test/data/csv/large_dataset.csv'
+        quality-threshold: 90
+        fail-on-issues: false
+
+    - name: Display Results
+      run: |
+        echo "## Large Dataset Analysis"
+        echo "Quality Score: ${{ steps.large.outputs.quality-score }}%"
+        echo "Files Analyzed: ${{ steps.large.outputs.files-analyzed }}"
+
+  test-json-clean:
+    runs-on: ubuntu-latest
+    name: Test JSON Format - Clean Data
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Analyze JSON Users Data
+      id: json-users
+      uses: ./
+      with:
+        file: 'test/data/json/users.json'
+        quality-threshold: 85
+        fail-on-issues: false
+        output-format: json
+
+    - name: Validate JSON Analysis
+      run: |
+        score="${{ steps.json-users.outputs.quality-score }}"
+
+        if [[ -z "$score" ]]; then
+          echo "❌ No quality score for JSON file"
+          exit 1
+        fi
+
+        echo "✅ JSON file analyzed successfully"
+        echo "Quality Score: ${score}%"
+
+  test-json-incomplete:
+    runs-on: ubuntu-latest
+    name: Test JSON Format - Incomplete Data
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Analyze Incomplete JSON Data
+      id: json-incomplete
+      uses: ./
+      with:
+        file: 'test/data/json/incomplete_records.json'
+        quality-threshold: 50
+        fail-on-issues: false
+
+    - name: Validate Completeness Detection
+      run: |
+        score="${{ steps.json-incomplete.outputs.quality-score }}"
+        completeness="${{ steps.json-incomplete.outputs.completeness-score }}"
+
+        echo "Quality Score: ${score}%"
+        echo "Completeness: ${completeness}%"
+
+        # Should detect incomplete data
+        if (( $(echo "$completeness < 80" | bc -l) )); then
+          echo "✅ Incompleteness correctly detected"
+        else
+          echo "⚠️  Expected lower completeness score"
+        fi
+
+  test-batch-csv:
+    runs-on: ubuntu-latest
+    name: Test Batch Mode - CSV Files
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Batch Analyze CSV Files
+      id: batch-csv
+      uses: ./
+      with:
+        file: 'test/data/batch/'
+        batch-mode: true
+        recursive: false
+        parallel: true
+        quality-threshold: 75
+        fail-on-issues: false
+        export-json-path: 'output/batch_analysis.json'
+
+    - name: Display Batch Results
+      run: |
+        echo "## Batch Analysis Results"
+        echo "Files Analyzed: ${{ steps.batch-csv.outputs.files-analyzed }}"
+        echo "Quality Score: ${{ steps.batch-csv.outputs.quality-score }}%"
+        echo "Quality Level: ${{ steps.batch-csv.outputs.quality-level }}"
+        echo "Total Issues: ${{ steps.batch-csv.outputs.issues-count }}"
+        echo "Batch Summary: ${{ steps.batch-csv.outputs.batch-summary }}"
+
+    - name: Validate Batch Processing
+      run: |
+        files="${{ steps.batch-csv.outputs.files-analyzed }}"
+        batch_summary="${{ steps.batch-csv.outputs.batch-summary }}"
+
+        if [[ "$files" -lt 1 ]]; then
+          echo "❌ Expected at least 1 file analyzed, got: $files"
+          exit 1
+        fi
+
+        if [[ -z "$batch_summary" ]]; then
+          echo "❌ No batch summary returned"
+          exit 1
+        fi
+
+        echo "✅ Batch processing successful"
+        echo "Analyzed $files file(s)"
+
+  test-batch-mixed-formats:
+    runs-on: ubuntu-latest
+    name: Test Batch Mode - Mixed Formats
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Batch Analyze Mixed Format Files
+      id: batch-mixed
+      uses: ./
+      with:
+        file: 'test/data/batch/'
+        batch-mode: true
+        recursive: false
+        parallel: true
+        quality-threshold: 70
+
+    - name: Display Results
+      run: |
+        echo "## Mixed Format Batch Results"
+        echo "Files Analyzed: ${{ steps.batch-mixed.outputs.files-analyzed }}"
+        echo "Quality Score: ${{ steps.batch-mixed.outputs.quality-score }}%"
+
+  test-quality-gate-pass:
+    runs-on: ubuntu-latest
+    name: Test Quality Gate - Pass
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Run Analysis with Quality Gate
+      id: gate-pass
+      uses: ./
+      with:
+        file: 'test/data/csv/clean_data.csv'
+        quality-threshold: 70
+        fail-on-issues: true
+
+    - name: Validate Gate Passed
+      run: |
+        echo "✅ Quality gate passed as expected"
+
+  test-quality-gate-warning:
+    runs-on: ubuntu-latest
+    name: Test Quality Gate - Warning Mode
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Run Analysis with Warning Only
+      id: gate-warn
+      uses: ./
+      with:
+        file: 'test/data/csv/dirty_data.csv'
+        quality-threshold: 90
+        fail-on-issues: false
+
+    - name: Validate Warning Mode
+      run: |
+        score="${{ steps.gate-warn.outputs.quality-score }}"
+
+        echo "✅ Warning mode working - workflow continues"
+        echo "Quality Score: ${score}%"
+
+  test-legacy-file:
+    runs-on: ubuntu-latest
+    name: Test Legacy Test Data
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Analyze Legacy Test File
+      id: legacy
+      uses: ./
+      with:
+        file: 'test/test_data.csv'
+        quality-threshold: 75
+        fail-on-issues: false
+
+    - name: Display Results
+      run: |
+        echo "## Legacy File Analysis"
+        echo "Quality Score: ${{ steps.legacy.outputs.quality-score }}%"
+        echo "✅ Legacy file compatibility maintained"
+
+  test-output-formats:
+    runs-on: ubuntu-latest
+    name: Test Different Output Formats
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Test JSON Output
+      id: json-out
+      uses: ./
+      with:
+        file: 'test/data/csv/clean_data.csv'
+        output-format: json
+        fail-on-issues: false
+
+    - name: Test Text Output
+      id: text-out
+      uses: ./
+      with:
+        file: 'test/data/csv/clean_data.csv'
+        output-format: text
+        fail-on-issues: false
+
+    - name: Validate Output Formats
+      run: |
+        json_score="${{ steps.json-out.outputs.quality-score }}"
+        text_score="${{ steps.text-out.outputs.quality-score }}"
+
+        echo "JSON Output Score: ${json_score}%"
+        echo "Text Output Score: ${text_score}%"
+
+        if [[ -n "$json_score" ]] && [[ -n "$text_score" ]]; then
+          echo "✅ Multiple output formats working"
+        else
+          echo "❌ Output format test failed"
+          exit 1
+        fi

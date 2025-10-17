@@ -1,0 +1,11 @@
+id,name,value,description,timestamp
+1,Normal Record,100,Standard data record,2024-01-15T10:00:00Z
+2,With Comma,"Value, with comma",Description with comma,2024-01-15T11:00:00Z
+3,With Quotes,"Value with ""quotes""","Description with ""quotes""",2024-01-15T12:00:00Z
+4,With Newline,"Value with
+newline","Description with
+newline",2024-01-15T13:00:00Z
+5,Unicode ñ,200,Descripción con ñ,2024-01-15T14:00:00Z
+6,Empty Values,,,
+7,Special Chars,!@#$%,Test<>[]{}()&,2024-01-15T16:00:00Z
+8,Very Long Value,999999999999999999,This is a very long description that goes on and on and on to test how the system handles lengthy text fields that might cause issues with parsing or processing,2024-01-15T17:00:00Z

@@ -1,0 +1,46 @@
+[
+  {
+    "id": 1,
+    "type": "normal",
+    "value": 100,
+    "nested": {
+      "level1": {
+        "level2": {
+          "deep_value": "deeply nested"
+        }
+      }
+    }
+  },
+  {
+    "id": 2,
+    "type": "with_null",
+    "value": null,
+    "nested": null
+  },
+  {
+    "id": 3,
+    "type": "with_empty",
+    "value": "",
+    "nested": {}
+  },
+  {
+    "id": 4,
+    "type": "with_arrays",
+    "value": 200,
+    "tags": ["tag1", "tag2", "tag3"],
+    "matrix": [[1, 2], [3, 4]]
+  },
+  {
+    "id": 5,
+    "type": "unicode",
+    "value": 300,
+    "description": "Unicöde ñ 中文 العربية 🚀"
+  },
+  {
+    "id": 6,
+    "type": "numeric_extremes",
+    "small": 0.0000001,
+    "large": 999999999999,
+    "negative": -999999
+  }
+]

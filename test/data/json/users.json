@@ -1,0 +1,67 @@
+[
+  {
+    "id": 1,
+    "username": "alice_j",
+    "email": "alice@example.com",
+    "age": 28,
+    "is_active": true,
+    "registration_date": "2020-01-15",
+    "profile_complete": 100,
+    "preferences": {
+      "newsletter": true,
+      "notifications": true
+    }
+  },
+  {
+    "id": 2,
+    "username": "bob_smith",
+    "email": "bob@example.com",
+    "age": 34,
+    "is_active": true,
+    "registration_date": "2019-03-22",
+    "profile_complete": 95,
+    "preferences": {
+      "newsletter": false,
+      "notifications": true
+    }
+  },
+  {
+    "id": 3,
+    "username": "carol_w",
+    "email": "carol@example.com",
+    "age": 42,
+    "is_active": true,
+    "registration_date": "2018-07-10",
+    "profile_complete": 100,
+    "preferences": {
+      "newsletter": true,
+      "notifications": false
+    }
+  },
+  {
+    "id": 4,
+    "username": "david_b",
+    "email": "david@example.com",
+    "age": 31,
+    "is_active": false,
+    "registration_date": "2021-02-01",
+    "profile_complete": 85,
+    "preferences": {
+      "newsletter": false,
+      "notifications": false
+    }
+  },
+  {
+    "id": 5,
+    "username": "emma_d",
+    "email": "emma@example.com",
+    "age": 29,
+    "is_active": true,
+    "registration_date": "2020-11-05",
+    "profile_complete": 90,
+    "preferences": {
+      "newsletter": true,
+      "notifications": true
+    }
+  }
+]
