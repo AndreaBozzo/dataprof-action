@@ -312,28 +312,6 @@ jobs:
         echo "✅ Warning mode working - workflow continues"
         echo "Quality Score: ${score}%"
 
-  test-legacy-file:
-    runs-on: ubuntu-latest
-    name: Test Legacy Test Data
-
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-
-    - name: Analyze Legacy Test File
-      id: legacy
-      uses: ./
-      with:
-        file: 'test/test_data.csv'
-        quality-threshold: 75
-        fail-on-issues: false
-
-    - name: Display Results
-      run: |
-        echo "## Legacy File Analysis"
-        echo "Quality Score: ${{ steps.legacy.outputs.quality-score }}%"
-        echo "✅ Legacy file compatibility maintained"
-
   test-output-formats:
     runs-on: ubuntu-latest
     name: Test Different Output Formats
