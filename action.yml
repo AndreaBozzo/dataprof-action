@@ -374,11 +374,7 @@ runs:
           # Count files analyzed
           files_analyzed=$(jq 'length' "$output_file" 2>/dev/null || echo "0")
 
-          # Aggregate metrics across all files
-          # Average quality score
-          quality_score=$(jq '[.[].quality.quality_score // .[].summary.data_quality_score // 0] | add / length' "$output_file" 2>/dev/null || echo "0")
-
-          # Aggregate dimension scores
+          # Aggregate dimension scores across all files
           completeness=$(jq '[.[].data_quality_metrics.completeness.complete_records_ratio // 0] | add / length' "$output_file" 2>/dev/null || echo "0")
           uniqueness=$(jq '[.[].data_quality_metrics.uniqueness.key_uniqueness // 0] | add / length' "$output_file" 2>/dev/null || echo "0")
           consistency=$(jq '[.[].data_quality_metrics.consistency.data_type_consistency // 0] | add / length' "$output_file" 2>/dev/null || echo "0")
@@ -394,6 +390,11 @@ runs:
           else
             timeliness="100.0"
           fi
+
+          # Calculate average quality score using ISO 8000/25012 weighted formula
+          # Completeness: 30%, Consistency: 25%, Uniqueness: 20%, Accuracy: 15%, Timeliness: 10%
+          quality_score=$(awk -v comp="$completeness" -v cons="$consistency" -v uniq="$uniqueness" -v acc="$accuracy" -v time="$timeliness" \
+            'BEGIN { printf "%.2f", (comp * 0.3) + (cons * 0.25) + (uniq * 0.2) + (acc * 0.15) + (time * 0.1) }')
 
           validity="$consistency"
 
@@ -413,10 +414,6 @@ runs:
         else
           echo "::notice::Parsing SINGLE FILE mode results"
 
-          # Extract metrics from ACTUAL dataprof JSON structure
-          # Overall quality score
-          quality_score=$(jq -r '.quality.quality_score // .summary.data_quality_score // "0"' "$output_file" 2>/dev/null || echo "0")
-
           # Extract individual dimension scores from data_quality_metrics
           completeness=$(jq -r '.data_quality_metrics.completeness.complete_records_ratio // "0"' "$output_file" 2>/dev/null || echo "0")
           uniqueness=$(jq -r '.data_quality_metrics.uniqueness.key_uniqueness // "0"' "$output_file" 2>/dev/null || echo "0")
@@ -433,6 +430,11 @@ runs:
           else
             timeliness="100.0"
           fi
+
+          # Calculate overall quality score using ISO 8000/25012 weighted formula
+          # Completeness: 30%, Consistency: 25%, Uniqueness: 20%, Accuracy: 15%, Timeliness: 10%
+          quality_score=$(awk -v comp="$completeness" -v cons="$consistency" -v uniq="$uniqueness" -v acc="$accuracy" -v time="$timeliness" \
+            'BEGIN { printf "%.2f", (comp * 0.3) + (cons * 0.25) + (uniq * 0.2) + (acc * 0.15) + (time * 0.1) }')
 
           validity="$consistency"
 
