@@ -188,7 +188,11 @@ runs:
       VERSION="${{ inputs.dataprof-version }}"
       if [[ "$VERSION" == "latest" ]] || [[ -z "$VERSION" ]]; then
         # Query crates.io API for latest version
-        VERSION=$(curl -s https://crates.io/api/v1/crates/dataprof | jq -r '.crate.max_version')
+        VERSION=$(curl -s https://crates.io/api/v1/crates/dataprof | jq -r '.crate.newest_version // .crate.max_version // .versions[0].num // empty')
+        if [[ -z "$VERSION" ]] || [[ "$VERSION" == "null" ]]; then
+          echo "::warning::Could not determine latest version from crates.io, installing without version constraint"
+          VERSION=""
+        fi
       fi
 
       echo "::notice::Installing dataprof version: $VERSION"
@@ -205,14 +209,23 @@ runs:
       # Install dataprof with proper error handling
       echo "::group::Installing dataprof via cargo"
 
-      if ! cargo install dataprof --version "=$VERSION" --features minimal --locked; then
-        echo "::warning::Failed to install with lockfile, retrying without..."
-        if ! cargo install dataprof --version "=$VERSION" --features minimal; then
-          echo "::warning::Failed to install specific version, trying latest..."
-          if ! cargo install dataprof --features minimal; then
-            echo "::error::All installation attempts failed"
-            exit 1
+      if [[ -n "$VERSION" ]]; then
+        # Try to install specific version
+        if ! cargo install dataprof --version "=$VERSION" --features minimal --locked; then
+          echo "::warning::Failed to install with lockfile, retrying without..."
+          if ! cargo install dataprof --version "=$VERSION" --features minimal; then
+            echo "::warning::Failed to install specific version, trying latest..."
+            if ! cargo install dataprof --features minimal; then
+              echo "::error::All installation attempts failed"
+              exit 1
+            fi
           fi
+        fi
+      else
+        # Install latest version without version constraint
+        if ! cargo install dataprof --features minimal; then
+          echo "::error::Installation failed"
+          exit 1
         fi
       fi
 
