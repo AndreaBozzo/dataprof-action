@@ -2,7 +2,7 @@
 
 All notable changes to the DataProf GitHub Action will be documented in this file.
 
-## [Unreleased]
+## [1.0.50] - 17/10/2025
 
 ### Added
 - **Multi-Format Support**: Full support for CSV, JSON, and Parquet file formats
