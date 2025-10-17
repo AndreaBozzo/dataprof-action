@@ -305,12 +305,9 @@ runs:
         [[ "${{ inputs.recursive }}" == "true" ]] && cmd_args+=("--recursive")
         [[ "${{ inputs.parallel }}" == "true" ]] && cmd_args+=("--parallel")
 
-        # Output format
-        cmd_args+=("--format" "${{ inputs.output-format }}")
-
-        # For JSON, always add detailed flag
+        # Set output format for batch
         if [[ "${{ inputs.output-format }}" == "json" ]]; then
-          cmd_args+=("--detailed")
+          cmd_args+=("--format" "json")
         fi
 
       else
@@ -320,12 +317,11 @@ runs:
         cmd_args=(
           "analyze"
           "$file_input"
-          "--format" "${{ inputs.output-format }}"
         )
 
-        # Add detailed flag for comprehensive output
+        # Set output format
         if [[ "${{ inputs.output-format }}" == "json" ]]; then
-          cmd_args+=("--detailed")
+          cmd_args+=("--format" "json")
         fi
       fi
 
