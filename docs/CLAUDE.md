@@ -2,4 +2,4 @@
 
 Project based on [https://github.com/AndreaBozzo/dataprof] 
 
-Allows data-quality checks to be run in CI/CD environments.
+Analyze CSV, JSON, and Parquet files for data quality with dataprof. Comprehensive quality metrics and quality gates for CI/CD workflows with batch processing support.'
