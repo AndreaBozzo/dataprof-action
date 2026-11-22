@@ -2,7 +2,7 @@
 
 All notable changes to the DataProf GitHub Action are documented in this file.
 
-## [2.0.0] - Unreleased
+## [2.0.0] - 2026-11-22
 
 Breaking rewrite targeting `dataprof >= 0.14.1` and `python -m dataprof.check`.
 
