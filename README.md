@@ -50,6 +50,22 @@ Passing a directory, a glob pattern matching multiple files, or multiple space- 
     source-version: ${{ github.sha }}
 ```
 
+The policy can also be written inline, so a workflow needs no extra file in the repository. A value starting with `{` is read as JSON; the action writes it to a temporary file and passes that to `--policy`:
+
+```yaml
+- name: Enforce quality policy inline
+  uses: AndreaBozzo/dataprof-action@v2
+  with:
+    file: data/orders.csv
+    policy: |
+      {
+        "min_rows": 1000,
+        "unique_columns": ["order_id"],
+        "max_null_count": {"customer_id": 0},
+        "max_date_age": {"ordered_at": 2}
+      }
+```
+
 ### First-Run Baseline with Promotion
 
 ```yaml
@@ -88,7 +104,7 @@ Each GitHub-hosted job starts on a fresh runner, so files written by `promote` d
 | `file` | File, directory, or glob pattern to check; space- or newline-separated for several sources | Yes | - |
 | `recursive` | Pass `-r` to recurse into subdirectories of directory sources. A `**` glob in `file` always matches across subdirectories, whatever this is set to | No | `false` |
 | `quality-threshold` | Minimum overall quality score (`0-100`), passed to `--min-quality`. Empty means no threshold unless set in `policy` | No | `''` |
-| `policy` | Path to a UTF-8 JSON policy file (`--policy`) | No | `''` |
+| `policy` | Path to a UTF-8 JSON policy file, or inline JSON starting with `{` (`--policy`) | No | `''` |
 | `scope` | Evidence scope: `full_source` or `observed` (`--scope`) | No | `''` |
 | `max-rows` | Cap the number of profiled rows (`--max-rows`) | No | `''` |
 | `source-version` | Source version identifier recorded in saved reports and gate output (`--source-version`) | No | `''` |

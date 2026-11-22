@@ -22,7 +22,7 @@ inputs:
     default: ''
 
   policy:
-    description: 'Path to a UTF-8 JSON policy file (--policy)'
+    description: 'Path to a UTF-8 JSON policy file, or the policy itself as inline JSON starting with "{" (--policy)'
     required: false
     default: ''
 

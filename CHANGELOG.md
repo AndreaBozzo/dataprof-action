@@ -19,6 +19,7 @@ Breaking rewrite targeting `dataprof >= 0.14.1` and `python -m dataprof.check`.
 
 ### Added
 
+- `policy` takes a path to a JSON policy file or the policy as inline JSON, so a workflow can state its rules without a separate file.
 - New inputs: `policy`, `scope`, `max-rows`, `source-version`, `baseline`, `allow-missing-baseline`, `promote`, `fail-on-inconclusive`, `python-version`.
 - New outputs: `verdict`, `violations-count`, `unevaluated-count`, `errors-count`, `skipped-count`, `report-path`, `precision-score`.
 - Python runner script (`scripts/dataprof_action.py`) with stdlib-only unit tests over recorded `--json` and `--report` fixtures under `test/fixtures/`.

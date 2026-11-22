@@ -18,7 +18,7 @@ import sys
 import tempfile
 import uuid
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -116,6 +116,31 @@ class ActionConfig:
             export_json_path=env.get("INPUT_EXPORT_JSON_PATH", "").strip(),
             dataprof_version=env.get("INPUT_DATAPROF_VERSION", "").strip(),
         )
+
+
+def is_inline_policy(policy: str) -> bool:
+    """Return True when the ``policy`` input holds JSON text rather than a path."""
+    return policy.lstrip().startswith("{")
+
+
+def materialize_inline_policy(config: ActionConfig, temp_root: Path) -> ActionConfig:
+    """Write an inline JSON ``policy`` input to a file and point the config at it.
+
+    The value starts with "{", so if it parses it is a JSON object; dataprof
+    itself validates the keys. A path input is returned unchanged.
+    """
+    if not is_inline_policy(config.policy):
+        return config
+    try:
+        parsed = json.loads(config.policy)
+    except json.JSONDecodeError as exc:
+        raise ActionInputError(
+            f"input 'policy' looks like inline JSON but does not parse: {exc}"
+        ) from exc
+    temp_root.mkdir(parents=True, exist_ok=True)
+    policy_path = temp_root / f"dataprof-policy-{uuid.uuid4().hex}.json"
+    policy_path.write_text(json.dumps(parsed, indent=2) + "\n", encoding="utf-8")
+    return replace(config, policy=str(policy_path))
 
 
 def _path_exists_safe(path_str: str) -> bool:
@@ -928,6 +953,9 @@ def run_action(
 
     try:
         validate_export_path_aliasing(config)
+        config = materialize_inline_policy(
+            config, Path(active_env.get("RUNNER_TEMP") or tempfile.gettempdir())
+        )
     except ActionInputError as exc:
         return _emit_error_run(
             kind="argument",

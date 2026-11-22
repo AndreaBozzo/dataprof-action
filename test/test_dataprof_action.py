@@ -834,3 +834,84 @@ def test_render_step_summary_caps_large_multi_source_and_keeps_json_complete(
     exported_doc = json.loads(export.read_text(encoding="utf-8"))
     assert len(exported_doc["sources"]) == total_sources
     assert exported_doc["sources"][-1]["path"] == f"data/café_batch_{total_sources - 1:04d}.csv"
+
+
+# ---------------------------------------------------------------------------
+# Inline policy JSON
+# ---------------------------------------------------------------------------
+
+
+def _run_with_policy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, policy: str
+) -> tuple[int, list[list[str]], str]:
+    source = tmp_path / "orders.csv"
+    source.write_text("id\n1\n", encoding="utf-8")
+    calls: list[list[str]] = []
+
+    class FakeProc:
+        returncode = 0
+        stdout = json.dumps(load_fixture("single_pass.json"))
+        stderr = ""
+
+    def fake_run(cmd: list[str], **kwargs: Any) -> Any:
+        calls.append(cmd)
+        return FakeProc()
+
+    monkeypatch.setattr(da.subprocess, "run", fake_run)
+    gh_out = tmp_path / "out.txt"
+    rc = da.run_action(
+        env={
+            "INPUT_FILE": str(source),
+            "INPUT_POLICY": policy,
+            "GITHUB_OUTPUT": str(gh_out),
+            "GITHUB_STEP_SUMMARY": str(tmp_path / "summary.md"),
+            "RUNNER_TEMP": str(tmp_path / "runner"),
+        },
+        python_executable=sys.executable,
+    )
+    return rc, calls, gh_out.read_text(encoding="utf-8")
+
+
+def test_inline_policy_json_is_written_to_a_file_and_passed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    policy = '{\n  "min_rows": 1,\n  "max_null_count": {"id": 0}\n}\n'
+    rc, calls, _ = _run_with_policy(tmp_path, monkeypatch, policy)
+
+    assert rc == 0
+    assert len(calls) == 1
+    cmd = calls[0]
+    policy_arg = Path(cmd[cmd.index("--policy") + 1])
+    assert policy_arg.parent == tmp_path / "runner"
+    assert json.loads(policy_arg.read_text(encoding="utf-8")) == {
+        "min_rows": 1,
+        "max_null_count": {"id": 0},
+    }
+
+
+def test_policy_path_is_passed_unchanged(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    policy_file = tmp_path / "policy.json"
+    policy_file.write_text('{"min_rows": 1}', encoding="utf-8")
+    rc, calls, _ = _run_with_policy(tmp_path, monkeypatch, str(policy_file))
+
+    assert rc == 0
+    cmd = calls[0]
+    assert cmd[cmd.index("--policy") + 1] == str(policy_file)
+
+
+@pytest.mark.parametrize(
+    "policy, message",
+    [
+        ('{"min_rows": 1', "does not parse"),
+        ('{"min_rows": 1} [1]', "does not parse"),
+    ],
+)
+def test_inline_policy_that_does_not_parse_is_an_argument_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, policy: str, message: str
+) -> None:
+    rc, calls, out_text = _run_with_policy(tmp_path, monkeypatch, policy)
+
+    assert rc == 3
+    assert calls == []
+    assert "verdict=error\n" in out_text
+    assert message in out_text
