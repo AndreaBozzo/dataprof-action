@@ -1,0 +1,102 @@
+{
+  "verdict": "pass",
+  "scope": "full_source",
+  "evidence": {
+    "coverage": "complete"
+  },
+  "checks": [
+    {
+      "code": "min_quality_score",
+      "expected": {
+        "comparison": "at_least",
+        "value": 80.0
+      },
+      "observed": 89.47,
+      "scope": "full_source",
+      "evidence": {
+        "coverage": "complete"
+      },
+      "status": "passed",
+      "message": "the overall quality score meets the required minimum"
+    },
+    {
+      "code": "max_quality_score_drop",
+      "expected": {
+        "comparison": "change_at_least",
+        "value": -5.0
+      },
+      "observed": 89.47,
+      "scope": "full_source",
+      "evidence": {
+        "coverage": "complete"
+      },
+      "baseline": {
+        "observed": 89.47,
+        "evidence": {
+          "coverage": "complete"
+        },
+        "change": 0.0
+      },
+      "status": "passed",
+      "message": "the overall quality score dropped no more than allowed from the baseline"
+    }
+  ],
+  "baseline": {
+    "reports": {
+      "a": {
+        "id": "3843dccd-c0e1-4ccd-97a6-8c3b01583990",
+        "timestamp": "2026-11-22T09:55:14.066099800+00:00",
+        "source": "test\\data\\csv\\clean_data.csv",
+        "rows_processed": 15,
+        "evidence": {
+          "coverage": "complete"
+        },
+        "generator": {
+          "version": "0.14.0",
+          "commit": "82f2592616812a9cf08d4f67d162e06637281d51",
+          "dirty": false
+        },
+        "source_identity": null
+      },
+      "b": {
+        "id": "cc2e6b65-5640-4f45-b992-215a975b1006",
+        "timestamp": "2026-11-22T09:55:14.297534200+00:00",
+        "source": "test\\data\\csv\\clean_data.csv",
+        "rows_processed": 15,
+        "evidence": {
+          "coverage": "complete"
+        },
+        "generator": {
+          "version": "0.14.0",
+          "commit": "82f2592616812a9cf08d4f67d162e06637281d51",
+          "dirty": false
+        },
+        "source_identity": null
+      },
+      "same_build": true
+    },
+    "schema": {
+      "added": [],
+      "removed": [],
+      "common": [
+        "id",
+        "name",
+        "email",
+        "age",
+        "salary",
+        "department",
+        "hire_date",
+        "status",
+        "performance_score"
+      ]
+    },
+    "diagnostics": [],
+    "timeliness_clock": "fixed"
+  },
+  "generator": {
+    "version": "0.14.0",
+    "commit": "82f2592616812a9cf08d4f67d162e06637281d51",
+    "dirty": false
+  },
+  "source_identity": null
+}

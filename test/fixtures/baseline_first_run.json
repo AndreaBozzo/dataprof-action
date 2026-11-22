@@ -1,0 +1,43 @@
+{
+  "verdict": "pass",
+  "scope": "full_source",
+  "evidence": {
+    "coverage": "complete"
+  },
+  "checks": [
+    {
+      "code": "min_quality_score",
+      "expected": {
+        "comparison": "at_least",
+        "value": 80.0
+      },
+      "observed": 89.47,
+      "scope": "full_source",
+      "evidence": {
+        "coverage": "complete"
+      },
+      "status": "passed",
+      "message": "the overall quality score meets the required minimum"
+    },
+    {
+      "code": "max_quality_score_drop",
+      "expected": {
+        "comparison": "change_at_least",
+        "value": -5.0
+      },
+      "scope": "full_source",
+      "evidence": {
+        "coverage": "complete"
+      },
+      "status": "not_applicable",
+      "message": "no baseline was used for this run"
+    }
+  ],
+  "baseline_missing": true,
+  "generator": {
+    "version": "0.14.0",
+    "commit": "82f2592616812a9cf08d4f67d162e06637281d51",
+    "dirty": false
+  },
+  "source_identity": null
+}

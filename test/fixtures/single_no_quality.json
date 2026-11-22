@@ -1,0 +1,29 @@
+{
+  "verdict": "pass",
+  "scope": "full_source",
+  "evidence": {
+    "coverage": "complete"
+  },
+  "checks": [
+    {
+      "code": "min_rows",
+      "expected": {
+        "comparison": "at_least",
+        "value": 1
+      },
+      "observed": 15,
+      "scope": "full_source",
+      "evidence": {
+        "coverage": "complete"
+      },
+      "status": "passed",
+      "message": "the scan read at least the required number of rows"
+    }
+  ],
+  "generator": {
+    "version": "0.14.0",
+    "commit": "82f2592616812a9cf08d4f67d162e06637281d51",
+    "dirty": false
+  },
+  "source_identity": null
+}

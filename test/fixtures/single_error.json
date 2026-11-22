@@ -1,0 +1,1 @@
+{"error": {"kind": "input", "message": "JSON parsing failed: No valid JSON records found in file (every record was malformed, not a JSON object, or held an integer outside the 64-bit range). A JSON source must hold exactly one array or object; for one record per line use format=\"jsonl\"\nVerify JSON format and encoding", "path": "test\\data\\invalid\\malformed.json"}}

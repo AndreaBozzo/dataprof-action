@@ -1,0 +1,30 @@
+{
+  "verdict": "inconclusive",
+  "scope": "full_source",
+  "evidence": {
+    "coverage": "complete"
+  },
+  "checks": [
+    {
+      "code": "min_dimension_score",
+      "dimension": "precision",
+      "expected": {
+        "comparison": "at_least",
+        "value": 80.0
+      },
+      "scope": "full_source",
+      "evidence": {
+        "coverage": "complete"
+      },
+      "status": "not_evaluated",
+      "reason": "not_assessed",
+      "message": "this dimension had nothing to assess in this run"
+    }
+  ],
+  "generator": {
+    "version": "0.14.0",
+    "commit": "82f2592616812a9cf08d4f67d162e06637281d51",
+    "dirty": false
+  },
+  "source_identity": null
+}

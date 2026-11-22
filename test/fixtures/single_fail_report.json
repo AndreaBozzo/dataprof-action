@@ -1,0 +1,536 @@
+{
+  "analysis_settings": {
+    "columns": {
+      "selection": "all"
+    },
+    "metric_packs": [
+      "schema",
+      "statistics",
+      "patterns",
+      "quality"
+    ],
+    "pattern_locale": "none",
+    "temporal_pairs": []
+  },
+  "column_profiles": [
+    {
+      "data_type": "Integer",
+      "invalid_count": 0,
+      "locale_number_count": 0,
+      "name": "id",
+      "null_count": 0,
+      "patterns": [],
+      "stats": {
+        "Numeric": {
+          "coefficient_of_variation": 70.96,
+          "exact": {
+            "max": "15",
+            "median": "6",
+            "min": "1",
+            "mode": "1",
+            "q1": "2.5",
+            "q2": "6",
+            "q3": "9.5"
+          },
+          "is_approximate": false,
+          "kurtosis": -0.9765,
+          "max": 15.0,
+          "mean": 6.6667,
+          "median": 6.0,
+          "min": 1.0,
+          "mode": 1.0,
+          "outlier_count": 0,
+          "quartiles": {
+            "iqr": 7.0,
+            "q1": 2.5,
+            "q2": 6.0,
+            "q3": 9.5
+          },
+          "skewness": 0.4973,
+          "std_dev": 4.7309,
+          "variance": 22.381
+        }
+      },
+      "total_count": 15,
+      "type_homogeneity": {
+        "boolean": 0,
+        "date": 0,
+        "numeric": 15,
+        "text": 0
+      },
+      "unique_count": 13,
+      "unique_count_is_approximate": false
+    },
+    {
+      "data_type": "String",
+      "locale_number_count": 0,
+      "name": "name",
+      "null_count": 2,
+      "patterns": [],
+      "stats": {
+        "Text": {
+          "avg_length": 11.9231,
+          "max_length": 17,
+          "min_length": 9
+        }
+      },
+      "total_count": 15,
+      "type_homogeneity": {
+        "boolean": 0,
+        "date": 0,
+        "numeric": 0,
+        "text": 13
+      },
+      "unique_count": 13,
+      "unique_count_is_approximate": false
+    },
+    {
+      "data_type": "String",
+      "locale_number_count": 0,
+      "name": "email",
+      "null_count": 3,
+      "patterns": [
+        {
+          "category": "contact",
+          "confidence": 0.8,
+          "match_count": 11,
+          "match_percentage": 91.66666666666666,
+          "name": "Email",
+          "regex": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+        }
+      ],
+      "stats": {
+        "Text": {
+          "avg_length": 21.5,
+          "max_length": 25,
+          "min_length": 12
+        }
+      },
+      "total_count": 15,
+      "type_homogeneity": {
+        "boolean": 0,
+        "date": 0,
+        "numeric": 0,
+        "text": 12
+      },
+      "unique_count": 12,
+      "unique_count_is_approximate": false
+    },
+    {
+      "data_type": "Integer",
+      "invalid_count": 0,
+      "locale_number_count": 0,
+      "name": "age",
+      "null_count": 1,
+      "patterns": [],
+      "stats": {
+        "Numeric": {
+          "coefficient_of_variation": 254.55,
+          "exact": {
+            "max": "999",
+            "median": "32",
+            "min": "25",
+            "mode": "29",
+            "q1": "29",
+            "q2": "32",
+            "q3": "36.75"
+          },
+          "is_approximate": false,
+          "kurtosis": 13.9854,
+          "max": 999.0,
+          "mean": 101.5,
+          "median": 32.0,
+          "min": 25.0,
+          "mode": 29.0,
+          "outlier_count": 1,
+          "quartiles": {
+            "iqr": 7.75,
+            "q1": 29.0,
+            "q2": 32.0,
+            "q3": 36.75
+          },
+          "skewness": 3.7389,
+          "std_dev": 258.372,
+          "variance": 66756.1154
+        }
+      },
+      "total_count": 15,
+      "type_homogeneity": {
+        "boolean": 0,
+        "date": 0,
+        "numeric": 14,
+        "text": 0
+      },
+      "unique_count": 13,
+      "unique_count_is_approximate": false
+    },
+    {
+      "data_type": "Integer",
+      "invalid_count": 0,
+      "locale_number_count": 0,
+      "name": "salary",
+      "null_count": 1,
+      "patterns": [
+        {
+          "category": "geographic",
+          "confidence": 0.06562499999999999,
+          "match_count": 13,
+          "match_percentage": 92.85714285714286,
+          "name": "CAP (IT)",
+          "regex": "^\\d{5}$"
+        },
+        {
+          "category": "geographic",
+          "confidence": 0.06562499999999999,
+          "match_count": 13,
+          "match_percentage": 92.85714285714286,
+          "name": "ZIP Code (US)",
+          "regex": "^\\d{5}(-\\d{4})?$"
+        },
+        {
+          "category": "geographic",
+          "confidence": 0.056249999999999994,
+          "match_count": 13,
+          "match_percentage": 92.85714285714286,
+          "name": "German PLZ",
+          "regex": "^\\d{5}$"
+        },
+        {
+          "category": "geographic",
+          "confidence": 0.056249999999999994,
+          "match_count": 13,
+          "match_percentage": 92.85714285714286,
+          "name": "French Code Postal",
+          "regex": "^\\d{5}$"
+        }
+      ],
+      "stats": {
+        "Numeric": {
+          "coefficient_of_variation": 34.4,
+          "exact": {
+            "max": "85000",
+            "median": "68500",
+            "min": "-5000",
+            "q1": "61500",
+            "q2": "68500",
+            "q3": "73750"
+          },
+          "is_approximate": false,
+          "kurtosis": 8.2138,
+          "max": 85000.0,
+          "mean": 63214.2857,
+          "median": 68500.0,
+          "min": -5000.0,
+          "outlier_count": 1,
+          "quartiles": {
+            "iqr": 12250.0,
+            "q1": 61500.0,
+            "q2": 68500.0,
+            "q3": 73750.0
+          },
+          "skewness": -2.6224,
+          "std_dev": 21747.4263,
+          "variance": 472950549.451
+        }
+      },
+      "total_count": 15,
+      "type_homogeneity": {
+        "boolean": 0,
+        "date": 0,
+        "numeric": 14,
+        "text": 0
+      },
+      "unique_count": 14,
+      "unique_count_is_approximate": false
+    },
+    {
+      "data_type": "String",
+      "locale_number_count": 0,
+      "name": "department",
+      "null_count": 1,
+      "patterns": [],
+      "stats": {
+        "Text": {
+          "avg_length": 8.5714,
+          "max_length": 11,
+          "min_length": 5
+        }
+      },
+      "total_count": 15,
+      "type_homogeneity": {
+        "boolean": 0,
+        "date": 0,
+        "numeric": 0,
+        "text": 14
+      },
+      "unique_count": 3,
+      "unique_count_is_approximate": false
+    },
+    {
+      "data_type": "Date",
+      "invalid_count": 1,
+      "locale_number_count": 0,
+      "name": "hire_date",
+      "null_count": 0,
+      "patterns": [
+        {
+          "category": "other",
+          "confidence": 0.5,
+          "match_count": 14,
+          "match_percentage": 93.33333333333333,
+          "name": "Date (ISO)",
+          "regex": "^\\d{4}-\\d{2}-\\d{2}$"
+        }
+      ],
+      "stats": {
+        "DateTime": {
+          "day_of_week_distribution": {
+            "Friday": 2,
+            "Monday": 1,
+            "Saturday": 4,
+            "Thursday": 4,
+            "Tuesday": 1,
+            "Wednesday": 2
+          },
+          "duration_days": 1718.0,
+          "largest_gap": {
+            "days": 532,
+            "from": "2017-05-20",
+            "to": "2018-11-03"
+          },
+          "max_datetime": "2022-02-01",
+          "min_datetime": "2017-05-20",
+          "month_distribution": {
+            "1": 3,
+            "11": 2,
+            "12": 1,
+            "2": 3,
+            "3": 1,
+            "4": 1,
+            "5": 1,
+            "6": 1,
+            "9": 1
+          },
+          "year_distribution": {
+            "2017": 1,
+            "2018": 2,
+            "2019": 3,
+            "2020": 3,
+            "2021": 3,
+            "2022": 2
+          }
+        }
+      },
+      "total_count": 15,
+      "type_homogeneity": {
+        "boolean": 0,
+        "date": 14,
+        "numeric": 0,
+        "text": 1
+      },
+      "unique_count": 15,
+      "unique_count_is_approximate": false
+    },
+    {
+      "data_type": "String",
+      "locale_number_count": 0,
+      "name": "status",
+      "null_count": 1,
+      "patterns": [],
+      "stats": {
+        "Text": {
+          "avg_length": 6.1429,
+          "max_length": 8,
+          "min_length": 6
+        }
+      },
+      "total_count": 15,
+      "type_homogeneity": {
+        "boolean": 0,
+        "date": 0,
+        "numeric": 0,
+        "text": 14
+      },
+      "unique_count": 2,
+      "unique_count_is_approximate": false
+    },
+    {
+      "data_type": "Integer",
+      "invalid_count": 0,
+      "locale_number_count": 0,
+      "name": "performance_score",
+      "null_count": 2,
+      "patterns": [],
+      "stats": {
+        "Numeric": {
+          "coefficient_of_variation": 19.19,
+          "exact": {
+            "max": "150",
+            "median": "91",
+            "min": "75",
+            "mode": "88",
+            "q1": "88",
+            "q2": "91",
+            "q3": "93"
+          },
+          "is_approximate": false,
+          "kurtosis": 10.0133,
+          "max": 150.0,
+          "mean": 93.3846,
+          "median": 91.0,
+          "min": 75.0,
+          "mode": 88.0,
+          "outlier_count": 3,
+          "quartiles": {
+            "iqr": 5.0,
+            "q1": 88.0,
+            "q2": 91.0,
+            "q3": 93.0
+          },
+          "skewness": 2.9473,
+          "std_dev": 17.919,
+          "variance": 321.0897
+        }
+      },
+      "total_count": 15,
+      "type_homogeneity": {
+        "boolean": 0,
+        "date": 0,
+        "numeric": 13,
+        "text": 0
+      },
+      "unique_count": 11,
+      "unique_count_is_approximate": false
+    }
+  ],
+  "data_source": {
+    "csv_metadata": {
+      "delimiter": ",",
+      "delimiter_detection": {
+        "delimiter": ",",
+        "header_fields": 9
+      }
+    },
+    "format": "csv",
+    "path": "test\\data\\csv\\dirty_data.csv",
+    "size_bytes": 1122,
+    "type": "file"
+  },
+  "execution": {
+    "bytes_consumed": 1122,
+    "columns_detected": 9,
+    "engine": "incremental",
+    "error_count": 0,
+    "memory_peak_mb": 24.2734375,
+    "ragged_row_count": 0,
+    "recovery_events": [],
+    "rows_processed": 15,
+    "sampling_applied": false,
+    "scan_time_ms": 22,
+    "source_exhausted": true,
+    "throughput_rows_sec": 681.8181818181819,
+    "unterminated_quote": false
+  },
+  "generator": {
+    "commit": "82f2592616812a9cf08d4f67d162e06637281d51",
+    "dirty": false,
+    "version": "0.14.0"
+  },
+  "id": "90fc675d-5202-4f13-963d-6de6af61afe0",
+  "metric_semantics": {
+    "accuracy_comparison": "exact_values",
+    "date_forms": "spaced_iso_datetimes",
+    "date_statistics": "every_value",
+    "json_number_reading": "literal_digits",
+    "key_column_source": "declared",
+    "key_uniqueness_units": "non_null_values",
+    "null_tokens": "common_markers",
+    "outlier_spread": "nonzero_iqr",
+    "outlier_units": "tested_values",
+    "pattern_match_count": "validated",
+    "range_rule_count": "violating_values",
+    "sampled_score_estimator": "population_weighted",
+    "shape_moments": "adjusted_sample",
+    "statistic_rounding": "four_decimals_twelve_significant",
+    "text_length_unit": "unicode_scalar"
+  },
+  "quality": {
+    "columns_without_value_checks": [],
+    "confidence": "Exact",
+    "metrics": {
+      "accuracy": {
+        "negative_values_in_positive": 0,
+        "numeric_values_checked": 56,
+        "outlier_ratio": 8.93,
+        "outlier_values_checked": 56,
+        "range_violations": 1,
+        "rule_values_checked": 14,
+        "rule_violating_values": 1
+      },
+      "completeness": {
+        "complete_records_ratio": 40.0,
+        "missing_values_ratio": 8.15,
+        "null_columns": [],
+        "total_cells": 135
+      },
+      "consistency": {
+        "data_type_consistency": 99.19,
+        "encoding_issues": 0,
+        "format_violations": 0,
+        "values_checked": 124
+      },
+      "score_weights": {
+        "accuracy": 0.15,
+        "completeness": 0.25,
+        "consistency": 0.2,
+        "precision": 0.05,
+        "timeliness": 0.1,
+        "uniqueness": 0.15,
+        "validity": 0.1
+      },
+      "timeliness": {
+        "clock": {
+          "max_data_age_years": 5.0,
+          "mode": "rolling",
+          "reference_date": "2026-11-22",
+          "timezone": "UTC"
+        },
+        "date_values_checked": 15,
+        "future_dates_count": 0,
+        "invalid_date_values": 1,
+        "stale_data_ratio": 85.71,
+        "temporal_pairs_checked": 0,
+        "temporal_violations": 0
+      },
+      "uniqueness": {
+        "duplicate_rows": 0,
+        "duplicate_rows_exact_limit": 1000000,
+        "high_cardinality_warning": true,
+        "key_uniqueness": 100.0,
+        "rows_checked": 15
+      },
+      "validity": {
+        "invalid_values": 2,
+        "valid_values_ratio": 92.59,
+        "values_checked": 27
+      }
+    },
+    "scores": {
+      "dimension_scores": {
+        "accuracy": 83.93,
+        "completeness": 65.93,
+        "consistency": 99.19,
+        "precision": null,
+        "timeliness": 7.62,
+        "uniqueness": 100.0,
+        "validity": 92.59
+      },
+      "overall_score": 77.82
+    }
+  },
+  "quality_status": {
+    "state": "computed"
+  },
+  "schema_version": 1,
+  "timestamp": "2026-11-22T09:55:12.289971600+00:00"
+}

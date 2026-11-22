@@ -1,132 +1,42 @@
 # Changelog
 
-All notable changes to the DataProf GitHub Action will be documented in this file.
+All notable changes to the DataProf GitHub Action are documented in this file.
 
-## [1.0.50] - 17/10/2025
+## [2.0.0] - Unreleased
+
+Breaking rewrite targeting `dataprof >= 0.14.1` and `python -m dataprof.check`.
+
+### Breaking Changes
+
+- Replaced the `cargo install dataprof` / `dataprof-cli` runtime with `pip install dataprof==<version>` inside an isolated Python virtual environment under `$RUNNER_TEMP`. Requires Python 3.11 or newer and `dataprof >= 0.14.1`.
+- Removed inputs: `batch-mode`, `parallel`, `output-format`. Passing a directory, a glob pattern matching more than one file, or multiple paths runs `dataprof.check` in multi-source mode directly; a glob matching a single regular file runs in single-source mode with score outputs and `report-path`.
+- Changed `quality-threshold` default from `80` to `''` (empty). Set `quality-threshold` or `policy` explicitly.
+- Changed `dataprof-version` default from `latest` to `0.14.1`.
+- Removed outputs: `quality-level`, `issues-count`, `batch-summary`. Replaced `issues-count` with `violations-count`.
+- Removed all in-action scoring, weighting, quality-level bucketing, and threshold comparisons. The step result follows dataprof's exit code directly (`0` pass, `1` fail controlled by `fail-on-issues`, `2` inconclusive controlled by `fail-on-inconclusive`, `3` error always fails).
+- `quality-score`, dimension `*-score` outputs, and `report-path` are now populated only in single-source runs from dataprof's `--report` profile JSON. Absent metrics and multi-source runs output empty strings, never `"0"`.
+- `export-json-path` now writes the raw `--json` document emitted by `python -m dataprof.check`.
 
 ### Added
-- **Multi-Format Support**: Full support for CSV, JSON, and Parquet file formats
-- **Batch Processing**: New `batch-mode` input for analyzing multiple files in one run
-- **Parallel Processing**: `parallel` flag for faster batch processing
-- **Recursive Directory Scanning**: `recursive` flag for deep directory traversal
-- **JSON Export**: `export-json-path` input to save detailed analysis results
-- **New Outputs**:
-  - `files-analyzed`: Number of files processed in batch mode
-  - `json-export-path`: Path to exported JSON file
-  - `batch-summary`: Human-readable summary of batch results
-- **Comprehensive Test Suite**:
-  - 13 test data files covering various scenarios
-  - New `comprehensive-test.yml` workflow with 11 test jobs
-  - Edge case tests for special characters, unicode, nested structures
-  - Batch processing tests with mixed formats
-- **Documentation**:
-  - `test/README.md`: Complete test data documentation
-  - `test/TESTING.md`: Testing guide with examples and troubleshooting
-  - Extended README with multiple usage examples
 
-### Changed
-- **Input Validation**: Enhanced to support multiple file formats (CSV, JSON, Parquet)
-- **File Detection**: Removed strict `.csv` extension requirement
-- **Analysis Logic**: Supports both `analyze` (single file) and `batch` (multiple files) commands
-- **Output Parsing**:
-  - Intelligent detection of single vs batch output
-  - Aggregation of metrics across multiple files
-  - Improved error handling and fallbacks
-- **Workflow Summary**: Enhanced with batch mode indicators and file counts
-- **README**: Complete rewrite with examples for all formats and features
+- `policy` takes a path to a JSON policy file or the policy as inline JSON, so a workflow can state its rules without a separate file.
+- New inputs: `policy`, `scope`, `max-rows`, `source-version`, `baseline`, `allow-missing-baseline`, `promote`, `fail-on-inconclusive`, `python-version`.
+- New outputs: `verdict`, `violations-count`, `unevaluated-count`, `errors-count`, `skipped-count`, `report-path`, `precision-score`.
+- Python runner script (`scripts/dataprof_action.py`) with stdlib-only unit tests over recorded `--json` and `--report` fixtures under `test/fixtures/`.
+- Cross-platform CI matrix (`ubuntu-latest`, `macos-latest`, `windows-latest`) covering pass, fail, inconclusive, error, multi-source directory, and first-run baseline promotion flows.
 
-### Fixed
-- File path handling in batch mode
-- JSON export functionality with proper directory creation
-- Output parsing for various dataprof output structures
-- Quality level calculation consistency
+### Removed
 
-### Technical Details
-- Action size: 689 lines (comprehensive implementation)
-- Documentation: 216 lines README + additional guides
-- Test coverage: 11 automated test scenarios
-- Test data: 13 files covering CSV, JSON, edge cases, and batch scenarios
-- Supported formats: CSV, JSON, Parquet (via dataprof CLI)
-- Version-agnostic: Works with any dataprof version without hardcoded dependencies
+- Deleted obsolete v1 documentation (`docs/CLAUDE.md`, `test/TESTING.md`, `.github/workflows/README.md`).
+
+## [1.0.50] - 2025-10-17
+
+### Added
+- Multi-format support for CSV, JSON, and Parquet via `dataprof-cli`.
+- Batch processing (`batch-mode`, `parallel`, `recursive`) and JSON export (`export-json-path`).
+- Comprehensive workflow test suite and test datasets under `test/data/`.
 
 ## [1.0.0] - Previous Release
 
-### Features
-- Basic CSV file analysis
-- Single file quality assessment
-- ISO 8000/25012 compliant metrics
-- Quality gate enforcement
-- GitHub Actions workflow integration
-
----
-
-## Migration Guide
-
-### From v1.0.0 to v2.0.0
-
-#### Backward Compatibility
-All existing workflows continue to work without changes. The action is 100% backward compatible.
-
-#### New Features Usage
-
-**Multi-format support:**
-```yaml
-# Before (CSV only)
-- uses: AndreaBozzo/dataprof-action@v1
-  with:
-    file: 'data/file.csv'
-
-# Now (CSV, JSON, Parquet)
-- uses: AndreaBozzo/dataprof-action@v2
-  with:
-    file: 'data/file.json'  # or .parquet
-```
-
-**Batch processing:**
-```yaml
-# New feature
-- uses: AndreaBozzo/dataprof-action@v2
-  with:
-    file: 'data/'
-    batch-mode: true
-    recursive: true
-    parallel: true
-```
-
-**JSON export:**
-```yaml
-# New feature
-- uses: AndreaBozzo/dataprof-action@v2
-  with:
-    file: 'data/file.csv'
-    export-json-path: 'reports/quality.json'
-
-# Use in next step
-- run: |
-    cat reports/quality.json | jq '.data_quality_metrics'
-```
-
-#### Breaking Changes
-None. The action maintains full backward compatibility.
-
-#### Deprecated Features
-None.
-
-## Testing
-
-All changes have been validated with:
-- ✅ 11 automated test scenarios
-- ✅ Clean data validation (>85% quality expected)
-- ✅ Dirty data detection (<75% quality expected)
-- ✅ Large dataset performance
-- ✅ JSON format analysis
-- ✅ Batch processing (3-5 files)
-- ✅ Quality gate enforcement
-- ✅ JSON export functionality
-- ✅ Multiple output formats
-- ✅ Legacy file compatibility
-
-## Links
-- [Repository](https://github.com/AndreaBozzo/dataprof-action)
-- [DataProf CLI](https://github.com/AndreaBozzo/dataprof)
-- [Issues](https://github.com/AndreaBozzo/dataprof-action/issues)
+### Added
+- Initial CSV data quality analysis action built on `dataprof-cli`.
