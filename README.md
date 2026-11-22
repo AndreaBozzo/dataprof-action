@@ -66,6 +66,53 @@ The policy can also be written inline, so a workflow needs no extra file in the 
       }
 ```
 
+### Use the Verdict in a Publish Job
+
+During a policy rollout, you may want the quality job to stay green when
+dataprof has too little evidence to decide. Pass the verdict to the publish job
+so publishing still requires an explicit `pass`.
+
+Add these jobs to a workflow for a dataset stored in the repository. Use your
+own policy and publish script paths.
+
+```yaml
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    outputs:
+      verdict: ${{ steps.gate.outputs.verdict }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Check orders
+        id: gate
+        uses: AndreaBozzo/dataprof-action@v2
+        with:
+          file: data/orders.csv
+          policy: policies/orders.json
+          fail-on-inconclusive: 'false'
+          export-json-path: reports/orders-verdict.json
+
+      - name: Upload the verdict JSON
+        if: ${{ !cancelled() && steps.gate.outputs.json-export-path != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: orders-quality-verdict
+          path: ${{ steps.gate.outputs.json-export-path }}
+
+  publish:
+    needs: quality
+    if: ${{ needs.quality.outputs.verdict == 'pass' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - run: ./publish-orders.sh data/orders.csv
+```
+
+An `inconclusive` verdict lets the quality job succeed and skips publishing.
+A policy violation or an execution error fails the quality job. The upload runs
+after a failed gate whenever the action wrote a JSON export. Only a successful
+quality job with a `pass` verdict can start the publish job.
+
 ### First-Run Baseline with Promotion
 
 ```yaml
