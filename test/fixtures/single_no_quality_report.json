@@ -1,0 +1,223 @@
+{
+  "analysis_settings": {
+    "columns": {
+      "selection": "all"
+    },
+    "metric_packs": [
+      "schema"
+    ],
+    "pattern_locale": "none",
+    "temporal_pairs": []
+  },
+  "column_profiles": [
+    {
+      "data_type": "Integer",
+      "locale_number_count": 0,
+      "name": "id",
+      "null_count": 0,
+      "patterns": null,
+      "stats": "None",
+      "total_count": 15,
+      "type_homogeneity": {
+        "boolean": 0,
+        "date": 0,
+        "numeric": 15,
+        "text": 0
+      },
+      "unique_count": 15,
+      "unique_count_is_approximate": false
+    },
+    {
+      "data_type": "String",
+      "locale_number_count": 0,
+      "name": "name",
+      "null_count": 0,
+      "patterns": null,
+      "stats": "None",
+      "total_count": 15,
+      "type_homogeneity": {
+        "boolean": 0,
+        "date": 0,
+        "numeric": 0,
+        "text": 15
+      },
+      "unique_count": 15,
+      "unique_count_is_approximate": false
+    },
+    {
+      "data_type": "String",
+      "locale_number_count": 0,
+      "name": "email",
+      "null_count": 0,
+      "patterns": null,
+      "stats": "None",
+      "total_count": 15,
+      "type_homogeneity": {
+        "boolean": 0,
+        "date": 0,
+        "numeric": 0,
+        "text": 15
+      },
+      "unique_count": 15,
+      "unique_count_is_approximate": false
+    },
+    {
+      "data_type": "Integer",
+      "locale_number_count": 0,
+      "name": "age",
+      "null_count": 0,
+      "patterns": null,
+      "stats": "None",
+      "total_count": 15,
+      "type_homogeneity": {
+        "boolean": 0,
+        "date": 0,
+        "numeric": 15,
+        "text": 0
+      },
+      "unique_count": 14,
+      "unique_count_is_approximate": false
+    },
+    {
+      "data_type": "Integer",
+      "locale_number_count": 0,
+      "name": "salary",
+      "null_count": 0,
+      "patterns": null,
+      "stats": "None",
+      "total_count": 15,
+      "type_homogeneity": {
+        "boolean": 0,
+        "date": 0,
+        "numeric": 15,
+        "text": 0
+      },
+      "unique_count": 15,
+      "unique_count_is_approximate": false
+    },
+    {
+      "data_type": "String",
+      "locale_number_count": 0,
+      "name": "department",
+      "null_count": 0,
+      "patterns": null,
+      "stats": "None",
+      "total_count": 15,
+      "type_homogeneity": {
+        "boolean": 0,
+        "date": 0,
+        "numeric": 0,
+        "text": 15
+      },
+      "unique_count": 3,
+      "unique_count_is_approximate": false
+    },
+    {
+      "data_type": "Date",
+      "locale_number_count": 0,
+      "name": "hire_date",
+      "null_count": 0,
+      "patterns": null,
+      "stats": "None",
+      "total_count": 15,
+      "type_homogeneity": {
+        "boolean": 0,
+        "date": 15,
+        "numeric": 0,
+        "text": 0
+      },
+      "unique_count": 15,
+      "unique_count_is_approximate": false
+    },
+    {
+      "data_type": "String",
+      "locale_number_count": 0,
+      "name": "status",
+      "null_count": 0,
+      "patterns": null,
+      "stats": "None",
+      "total_count": 15,
+      "type_homogeneity": {
+        "boolean": 0,
+        "date": 0,
+        "numeric": 0,
+        "text": 15
+      },
+      "unique_count": 1,
+      "unique_count_is_approximate": false
+    },
+    {
+      "data_type": "Integer",
+      "locale_number_count": 0,
+      "name": "performance_score",
+      "null_count": 0,
+      "patterns": null,
+      "stats": "None",
+      "total_count": 15,
+      "type_homogeneity": {
+        "boolean": 0,
+        "date": 0,
+        "numeric": 15,
+        "text": 0
+      },
+      "unique_count": 11,
+      "unique_count_is_approximate": false
+    }
+  ],
+  "data_source": {
+    "csv_metadata": {
+      "delimiter": ",",
+      "delimiter_detection": {
+        "delimiter": ",",
+        "header_fields": 9
+      }
+    },
+    "format": "csv",
+    "path": "test\\data\\csv\\clean_data.csv",
+    "size_bytes": 1251,
+    "type": "file"
+  },
+  "execution": {
+    "bytes_consumed": 1251,
+    "columns_detected": 9,
+    "engine": "incremental",
+    "error_count": 0,
+    "memory_peak_mb": 24.58984375,
+    "ragged_row_count": 0,
+    "recovery_events": [],
+    "rows_processed": 15,
+    "sampling_applied": false,
+    "scan_time_ms": 6,
+    "source_exhausted": true,
+    "throughput_rows_sec": 2500.0,
+    "unterminated_quote": false
+  },
+  "generator": {
+    "commit": "82f2592616812a9cf08d4f67d162e06637281d51",
+    "dirty": false,
+    "version": "0.14.0"
+  },
+  "id": "bc25de76-a17e-427d-8b67-432e916a9feb",
+  "metric_semantics": {
+    "accuracy_comparison": "exact_values",
+    "date_forms": "spaced_iso_datetimes",
+    "date_statistics": "every_value",
+    "json_number_reading": "literal_digits",
+    "key_column_source": "declared",
+    "key_uniqueness_units": "non_null_values",
+    "null_tokens": "common_markers",
+    "outlier_spread": "nonzero_iqr",
+    "outlier_units": "tested_values",
+    "pattern_match_count": "validated",
+    "range_rule_count": "violating_values",
+    "sampled_score_estimator": "population_weighted",
+    "shape_moments": "adjusted_sample",
+    "statistic_rounding": "four_decimals_twelve_significant",
+    "text_length_unit": "unicode_scalar"
+  },
+  "quality_status": {
+    "state": "not_requested"
+  },
+  "schema_version": 1,
+  "timestamp": "2026-11-22T09:55:11.960365800+00:00"
+}

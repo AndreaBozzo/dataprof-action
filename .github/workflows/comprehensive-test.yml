@@ -2,351 +2,344 @@ name: Comprehensive DataProf Tests
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
-  test-csv-clean:
+  unit-tests:
+    name: Unit Tests and Lint
     runs-on: ubuntu-latest
-    name: Test Clean CSV Data
-
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Analyze Clean CSV Data
-      id: clean
-      uses: ./
-      with:
-        file: 'test/data/csv/clean_data.csv'
-        quality-threshold: 85
-        fail-on-issues: false
-        output-format: json
-        export-json-path: 'output/clean_analysis.json'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
-    - name: Display Results
-      run: |
-        echo "## Clean Data Analysis Results"
-        echo "Quality Score: ${{ steps.clean.outputs.quality-score }}%"
-        echo "Quality Level: ${{ steps.clean.outputs.quality-level }}"
-        echo "Completeness: ${{ steps.clean.outputs.completeness-score }}%"
-        echo "Uniqueness: ${{ steps.clean.outputs.uniqueness-score }}%"
-        echo "Consistency: ${{ steps.clean.outputs.consistency-score }}%"
-        echo "Issues Count: ${{ steps.clean.outputs.issues-count }}"
-        echo "JSON Export: ${{ steps.clean.outputs.json-export-path }}"
+      - name: Install test tools
+        run: python -m pip install --disable-pip-version-check pytest ruff
 
-    - name: Validate High Quality
-      run: |
-        score="${{ steps.clean.outputs.quality-score }}"
+      - name: Lint and format check
+        run: |
+          ruff check scripts test
+          ruff format --check scripts test
 
-        if ! [[ "$score" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
-          echo "❌ Quality score is not numeric: $score"
-          exit 1
-        fi
+      - name: Run unit tests
+        run: pytest -v
 
-        if (( $(echo "$score < 80" | bc -l) )); then
-          echo "⚠️  Clean data quality lower than expected: ${score}%"
-        else
-          echo "✅ Clean data quality validated: ${score}%"
-        fi
-
-    - name: Validate JSON Export
-      run: |
-        export_path="${{ steps.clean.outputs.json-export-path }}"
-
-        if [[ -z "$export_path" ]]; then
-          echo "❌ No export path returned"
-          exit 1
-        fi
-
-        if [[ ! -f "$export_path" ]]; then
-          echo "❌ Export file not found: $export_path"
-          exit 1
-        fi
-
-        echo "✅ JSON export successful: $export_path"
-
-  test-csv-dirty:
-    runs-on: ubuntu-latest
-    name: Test Dirty CSV Data
-
+  test-pass:
+    name: Pass (${{ matrix.os }}, dataprof ${{ matrix.dataprof-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        dataprof-version: ['0.15.0rc1']
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Analyze Dirty CSV Data
-      id: dirty
-      uses: ./
-      with:
-        file: 'test/data/csv/dirty_data.csv'
-        quality-threshold: 50
-        fail-on-issues: false
-        output-format: json
+      - name: Check clean CSV
+        id: clean
+        uses: ./
+        with:
+          file: test/data/csv/clean_data.csv
+          quality-threshold: '80'
+          export-json-path: output/clean.json
+          dataprof-version: ${{ matrix.dataprof-version }}
 
-    - name: Display Results
-      run: |
-        echo "## Dirty Data Analysis Results"
-        echo "Quality Score: ${{ steps.dirty.outputs.quality-score }}%"
-        echo "Quality Level: ${{ steps.dirty.outputs.quality-level }}"
-        echo "Completeness: ${{ steps.dirty.outputs.completeness-score }}%"
-        echo "Uniqueness: ${{ steps.dirty.outputs.uniqueness-score }}%"
-        echo "Consistency: ${{ steps.dirty.outputs.consistency-score }}%"
-        echo "Accuracy: ${{ steps.dirty.outputs.accuracy-score }}%"
-        echo "Issues Count: ${{ steps.dirty.outputs.issues-count }}"
+      - name: Assert pass outputs
+        env:
+          VERDICT: ${{ steps.clean.outputs.verdict }}
+          QUALITY_SCORE: ${{ steps.clean.outputs.quality-score }}
+          COMPLETENESS_SCORE: ${{ steps.clean.outputs.completeness-score }}
+          PRECISION_SCORE: ${{ steps.clean.outputs.precision-score }}
+          VIOLATIONS_COUNT: ${{ steps.clean.outputs.violations-count }}
+          UNEVALUATED_COUNT: ${{ steps.clean.outputs.unevaluated-count }}
+          ERRORS_COUNT: ${{ steps.clean.outputs.errors-count }}
+          SKIPPED_COUNT: ${{ steps.clean.outputs.skipped-count }}
+          FILES_ANALYZED: ${{ steps.clean.outputs.files-analyzed }}
+          JSON_EXPORT_PATH: ${{ steps.clean.outputs.json-export-path }}
+          REPORT_PATH: ${{ steps.clean.outputs.report-path }}
+        run: |
+          test "$VERDICT" = "pass"
+          test -n "$QUALITY_SCORE"
+          test -n "$COMPLETENESS_SCORE"
+          test -z "$PRECISION_SCORE"
+          test "$VIOLATIONS_COUNT" = "0"
+          test "$UNEVALUATED_COUNT" = "0"
+          test "$ERRORS_COUNT" = "0"
+          test "$SKIPPED_COUNT" = "0"
+          test "$FILES_ANALYZED" = "1"
+          test -f "$JSON_EXPORT_PATH"
+          test -f "$REPORT_PATH"
 
-    - name: Validate Issue Detection
-      run: |
-        score="${{ steps.dirty.outputs.quality-score }}"
-        issues="${{ steps.dirty.outputs.issues-count }}"
-
-        echo "Quality Score: ${score}%"
-        echo "Issues Found: ${issues}"
-
-        # Dirty data should have lower quality
-        if (( $(echo "$score > 85" | bc -l) )); then
-          echo "⚠️  Quality unexpectedly high for dirty data: ${score}%"
-        else
-          echo "✅ Quality issues correctly detected"
-        fi
-
-        # Should have detected issues
-        if [[ "$issues" -gt 0 ]] || [[ "$score" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
-          echo "✅ Issues detection working"
-        fi
-
-  test-csv-large:
-    runs-on: ubuntu-latest
-    name: Test Large CSV Dataset
-
+  test-fail:
+    name: Fail (${{ matrix.os }}, dataprof ${{ matrix.dataprof-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        dataprof-version: ['0.15.0rc1']
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Analyze Large Dataset
-      id: large
-      uses: ./
-      with:
-        file: 'test/data/csv/large_dataset.csv'
-        quality-threshold: 90
-        fail-on-issues: false
+      - name: Check dirty CSV with fail-on-issues false
+        id: dirty
+        uses: ./
+        with:
+          file: test/data/csv/dirty_data.csv
+          quality-threshold: '95'
+          fail-on-issues: 'false'
+          dataprof-version: ${{ matrix.dataprof-version }}
 
-    - name: Display Results
-      run: |
-        echo "## Large Dataset Analysis"
-        echo "Quality Score: ${{ steps.large.outputs.quality-score }}%"
-        echo "Files Analyzed: ${{ steps.large.outputs.files-analyzed }}"
+      - name: Assert fail outputs when continuing
+        env:
+          VERDICT: ${{ steps.dirty.outputs.verdict }}
+          VIOLATIONS_COUNT: ${{ steps.dirty.outputs.violations-count }}
+          FILES_ANALYZED: ${{ steps.dirty.outputs.files-analyzed }}
+          QUALITY_SCORE: ${{ steps.dirty.outputs.quality-score }}
+        run: |
+          test "$VERDICT" = "fail"
+          test "$VIOLATIONS_COUNT" = "1"
+          test "$FILES_ANALYZED" = "1"
+          test -n "$QUALITY_SCORE"
 
-  test-json-clean:
-    runs-on: ubuntu-latest
-    name: Test JSON Format - Clean Data
+      - name: Check dirty CSV with fail-on-issues true
+        id: dirty-strict
+        continue-on-error: true
+        uses: ./
+        with:
+          file: test/data/csv/dirty_data.csv
+          quality-threshold: '95'
+          fail-on-issues: 'true'
+          dataprof-version: ${{ matrix.dataprof-version }}
 
+      - name: Assert strict fail exits non-zero
+        env:
+          OUTCOME: ${{ steps.dirty-strict.outcome }}
+          VERDICT: ${{ steps.dirty-strict.outputs.verdict }}
+        run: |
+          test "$OUTCOME" = "failure"
+          test "$VERDICT" = "fail"
+
+  test-inconclusive:
+    name: Inconclusive (${{ matrix.os }}, dataprof ${{ matrix.dataprof-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        dataprof-version: ['0.15.0rc1']
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Analyze JSON Users Data
-      id: json-users
-      uses: ./
-      with:
-        file: 'test/data/json/users.json'
-        quality-threshold: 85
-        fail-on-issues: false
-        output-format: json
+      - name: Check capped scan under full_source with fail-on-inconclusive false
+        id: inconc
+        uses: ./
+        with:
+          file: test/data/csv/large_dataset.csv
+          quality-threshold: '80'
+          max-rows: '5'
+          scope: full_source
+          fail-on-inconclusive: 'false'
+          dataprof-version: ${{ matrix.dataprof-version }}
 
-    - name: Validate JSON Analysis
-      run: |
-        score="${{ steps.json-users.outputs.quality-score }}"
+      - name: Assert inconclusive outputs
+        env:
+          VERDICT: ${{ steps.inconc.outputs.verdict }}
+          VIOLATIONS_COUNT: ${{ steps.inconc.outputs.violations-count }}
+          UNEVALUATED_COUNT: ${{ steps.inconc.outputs.unevaluated-count }}
+          FILES_ANALYZED: ${{ steps.inconc.outputs.files-analyzed }}
+        run: |
+          test "$VERDICT" = "inconclusive"
+          test "$VIOLATIONS_COUNT" = "0"
+          test "$UNEVALUATED_COUNT" = "1"
+          test "$FILES_ANALYZED" = "1"
 
-        if [[ -z "$score" ]]; then
-          echo "❌ No quality score for JSON file"
-          exit 1
-        fi
+      - name: Check capped scan under full_source with fail-on-inconclusive true
+        id: inconc-strict
+        continue-on-error: true
+        uses: ./
+        with:
+          file: test/data/csv/large_dataset.csv
+          quality-threshold: '80'
+          max-rows: '5'
+          scope: full_source
+          fail-on-inconclusive: 'true'
+          dataprof-version: ${{ matrix.dataprof-version }}
 
-        echo "✅ JSON file analyzed successfully"
-        echo "Quality Score: ${score}%"
+      - name: Assert strict inconclusive exits non-zero
+        env:
+          OUTCOME: ${{ steps.inconc-strict.outcome }}
+          VERDICT: ${{ steps.inconc-strict.outputs.verdict }}
+        run: |
+          test "$OUTCOME" = "failure"
+          test "$VERDICT" = "inconclusive"
 
-  test-json-incomplete:
-    runs-on: ubuntu-latest
-    name: Test JSON Format - Incomplete Data
-
+  test-error:
+    name: Error (${{ matrix.os }}, dataprof ${{ matrix.dataprof-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        dataprof-version: ['0.15.0rc1']
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Analyze Incomplete JSON Data
-      id: json-incomplete
-      uses: ./
-      with:
-        file: 'test/data/json/incomplete_records.json'
-        quality-threshold: 50
-        fail-on-issues: false
+      - name: Check missing source
+        id: missing
+        continue-on-error: true
+        uses: ./
+        with:
+          file: test/data/csv/does_not_exist.csv
+          quality-threshold: '80'
+          fail-on-issues: 'false'
+          fail-on-inconclusive: 'false'
+          dataprof-version: ${{ matrix.dataprof-version }}
 
-    - name: Validate Completeness Detection
-      run: |
-        score="${{ steps.json-incomplete.outputs.quality-score }}"
-        completeness="${{ steps.json-incomplete.outputs.completeness-score }}"
+      - name: Assert missing source always fails
+        env:
+          OUTCOME: ${{ steps.missing.outcome }}
+          VERDICT: ${{ steps.missing.outputs.verdict }}
+          ERRORS_COUNT: ${{ steps.missing.outputs.errors-count }}
+          FILES_ANALYZED: ${{ steps.missing.outputs.files-analyzed }}
+          QUALITY_SCORE: ${{ steps.missing.outputs.quality-score }}
+        run: |
+          test "$OUTCOME" = "failure"
+          test "$VERDICT" = "error"
+          test "$ERRORS_COUNT" = "1"
+          test "$FILES_ANALYZED" = "0"
+          test -z "$QUALITY_SCORE"
 
-        echo "Quality Score: ${score}%"
-        echo "Completeness: ${completeness}%"
+      - name: Check malformed JSON source
+        id: malformed
+        continue-on-error: true
+        uses: ./
+        with:
+          file: test/data/invalid/malformed.json
+          quality-threshold: '80'
+          fail-on-issues: 'false'
+          fail-on-inconclusive: 'false'
+          dataprof-version: ${{ matrix.dataprof-version }}
 
-        # Should detect incomplete data
-        if (( $(echo "$completeness < 80" | bc -l) )); then
-          echo "✅ Incompleteness correctly detected"
-        else
-          echo "⚠️  Expected lower completeness score"
-        fi
+      - name: Assert malformed source always fails
+        env:
+          OUTCOME: ${{ steps.malformed.outcome }}
+          VERDICT: ${{ steps.malformed.outputs.verdict }}
+          ERRORS_COUNT: ${{ steps.malformed.outputs.errors-count }}
+          FILES_ANALYZED: ${{ steps.malformed.outputs.files-analyzed }}
+        run: |
+          test "$OUTCOME" = "failure"
+          test "$VERDICT" = "error"
+          test "$ERRORS_COUNT" = "1"
+          test "$FILES_ANALYZED" = "0"
 
-  test-batch-csv:
-    runs-on: ubuntu-latest
-    name: Test Batch Mode - CSV Files
-
+  test-multi-source:
+    name: Multi-source Directory (${{ matrix.os }}, dataprof ${{ matrix.dataprof-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        dataprof-version: ['0.15.0rc1']
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Batch Analyze CSV Files
-      id: batch-csv
-      uses: ./
-      with:
-        file: 'test/data/batch/'
-        batch-mode: true
-        recursive: false
-        parallel: true
-        quality-threshold: 75
-        fail-on-issues: false
-        export-json-path: 'output/batch_analysis.json'
+      - name: Check batch directory
+        id: batch
+        uses: ./
+        with:
+          file: test/data/batch/
+          quality-threshold: '80'
+          export-json-path: output/batch.json
+          dataprof-version: ${{ matrix.dataprof-version }}
 
-    - name: Display Batch Results
-      run: |
-        echo "## Batch Analysis Results"
-        echo "Files Analyzed: ${{ steps.batch-csv.outputs.files-analyzed }}"
-        echo "Quality Score: ${{ steps.batch-csv.outputs.quality-score }}%"
-        echo "Quality Level: ${{ steps.batch-csv.outputs.quality-level }}"
-        echo "Total Issues: ${{ steps.batch-csv.outputs.issues-count }}"
-        echo "Batch Summary: ${{ steps.batch-csv.outputs.batch-summary }}"
+      - name: Assert multi-source outputs
+        env:
+          VERDICT: ${{ steps.batch.outputs.verdict }}
+          FILES_ANALYZED: ${{ steps.batch.outputs.files-analyzed }}
+          VIOLATIONS_COUNT: ${{ steps.batch.outputs.violations-count }}
+          ERRORS_COUNT: ${{ steps.batch.outputs.errors-count }}
+          SKIPPED_COUNT: ${{ steps.batch.outputs.skipped-count }}
+          QUALITY_SCORE: ${{ steps.batch.outputs.quality-score }}
+          COMPLETENESS_SCORE: ${{ steps.batch.outputs.completeness-score }}
+          REPORT_PATH: ${{ steps.batch.outputs.report-path }}
+          JSON_EXPORT_PATH: ${{ steps.batch.outputs.json-export-path }}
+        run: |
+          test "$VERDICT" = "pass"
+          test "$FILES_ANALYZED" = "5"
+          test "$VIOLATIONS_COUNT" = "0"
+          test "$ERRORS_COUNT" = "0"
+          test "$SKIPPED_COUNT" = "0"
+          test -z "$QUALITY_SCORE"
+          test -z "$COMPLETENESS_SCORE"
+          test -z "$REPORT_PATH"
+          test -f "$JSON_EXPORT_PATH"
 
-    - name: Validate Batch Processing
-      run: |
-        files="${{ steps.batch-csv.outputs.files-analyzed }}"
-        batch_summary="${{ steps.batch-csv.outputs.batch-summary }}"
-
-        if [[ "$files" -lt 1 ]]; then
-          echo "❌ Expected at least 1 file analyzed, got: $files"
-          exit 1
-        fi
-
-        if [[ -z "$batch_summary" ]]; then
-          echo "❌ No batch summary returned"
-          exit 1
-        fi
-
-        echo "✅ Batch processing successful"
-        echo "Analyzed $files file(s)"
-
-  test-batch-mixed-formats:
-    runs-on: ubuntu-latest
-    name: Test Batch Mode - Mixed Formats
-
+  test-baseline-flow:
+    name: Baseline First Run and Promotion (${{ matrix.os }}, dataprof ${{ matrix.dataprof-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        dataprof-version: ['0.15.0rc1']
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Batch Analyze Mixed Format Files
-      id: batch-mixed
-      uses: ./
-      with:
-        file: 'test/data/batch/'
-        batch-mode: true
-        recursive: false
-        parallel: true
-        quality-threshold: 70
+      - name: First run with allow-missing-baseline and promote
+        id: run1
+        uses: ./
+        with:
+          file: test/data/csv/clean_data.csv
+          policy: test/data/policies/baseline.json
+          baseline: ${{ runner.temp }}/clean_baseline.json
+          allow-missing-baseline: 'true'
+          promote: ${{ runner.temp }}/clean_baseline.json
+          dataprof-version: ${{ matrix.dataprof-version }}
 
-    - name: Display Results
-      run: |
-        echo "## Mixed Format Batch Results"
-        echo "Files Analyzed: ${{ steps.batch-mixed.outputs.files-analyzed }}"
-        echo "Quality Score: ${{ steps.batch-mixed.outputs.quality-score }}%"
+      - name: Assert first run passed and wrote baseline
+        env:
+          VERDICT: ${{ steps.run1.outputs.verdict }}
+          VIOLATIONS_COUNT: ${{ steps.run1.outputs.violations-count }}
+          BASELINE_FILE: ${{ runner.temp }}/clean_baseline.json
+        run: |
+          test "$VERDICT" = "pass"
+          test "$VIOLATIONS_COUNT" = "0"
+          test -f "$BASELINE_FILE"
 
-  test-quality-gate-pass:
-    runs-on: ubuntu-latest
-    name: Test Quality Gate - Pass
+      - name: Second run against promoted baseline
+        id: run2
+        uses: ./
+        with:
+          file: test/data/csv/clean_data.csv
+          policy: test/data/policies/baseline.json
+          baseline: ${{ runner.temp }}/clean_baseline.json
+          promote: ${{ runner.temp }}/clean_baseline.json
+          dataprof-version: ${{ matrix.dataprof-version }}
 
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-
-    - name: Run Analysis with Quality Gate
-      id: gate-pass
-      uses: ./
-      with:
-        file: 'test/data/csv/clean_data.csv'
-        quality-threshold: 70
-        fail-on-issues: true
-
-    - name: Validate Gate Passed
-      run: |
-        echo "✅ Quality gate passed as expected"
-
-  test-quality-gate-warning:
-    runs-on: ubuntu-latest
-    name: Test Quality Gate - Warning Mode
-
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-
-    - name: Run Analysis with Warning Only
-      id: gate-warn
-      uses: ./
-      with:
-        file: 'test/data/csv/dirty_data.csv'
-        quality-threshold: 90
-        fail-on-issues: false
-
-    - name: Validate Warning Mode
-      run: |
-        score="${{ steps.gate-warn.outputs.quality-score }}"
-
-        echo "✅ Warning mode working - workflow continues"
-        echo "Quality Score: ${score}%"
-
-  test-output-formats:
-    runs-on: ubuntu-latest
-    name: Test Different Output Formats
-
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-
-    - name: Test JSON Output
-      id: json-out
-      uses: ./
-      with:
-        file: 'test/data/csv/clean_data.csv'
-        output-format: json
-        fail-on-issues: false
-
-    - name: Test Text Output
-      id: text-out
-      uses: ./
-      with:
-        file: 'test/data/csv/clean_data.csv'
-        output-format: text
-        fail-on-issues: false
-
-    - name: Validate Output Formats
-      run: |
-        json_score="${{ steps.json-out.outputs.quality-score }}"
-        text_score="${{ steps.text-out.outputs.quality-score }}"
-
-        echo "JSON Output Score: ${json_score}%"
-        echo "Text Output Score: ${text_score}%"
-
-        if [[ -n "$json_score" ]] && [[ -n "$text_score" ]]; then
-          echo "✅ Multiple output formats working"
-        else
-          echo "❌ Output format test failed"
-          exit 1
-        fi
+      - name: Assert second run used baseline and passed
+        env:
+          VERDICT: ${{ steps.run2.outputs.verdict }}
+          VIOLATIONS_COUNT: ${{ steps.run2.outputs.violations-count }}
+          FILES_ANALYZED: ${{ steps.run2.outputs.files-analyzed }}
+        run: |
+          test "$VERDICT" = "pass"
+          test "$VIOLATIONS_COUNT" = "0"
+          test "$FILES_ANALYZED" = "1"

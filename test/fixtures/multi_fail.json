@@ -1,0 +1,70 @@
+{
+  "verdict": "fail",
+  "sources": [
+    {
+      "path": "test\\data\\csv\\clean_data.csv",
+      "result": {
+        "verdict": "pass",
+        "scope": "full_source",
+        "evidence": {
+          "coverage": "complete"
+        },
+        "checks": [
+          {
+            "code": "min_quality_score",
+            "expected": {
+              "comparison": "at_least",
+              "value": 85.0
+            },
+            "observed": 89.47,
+            "scope": "full_source",
+            "evidence": {
+              "coverage": "complete"
+            },
+            "status": "passed",
+            "message": "the overall quality score meets the required minimum"
+          }
+        ],
+        "generator": {
+          "version": "0.14.0",
+          "commit": "82f2592616812a9cf08d4f67d162e06637281d51",
+          "dirty": false
+        },
+        "source_identity": null
+      }
+    },
+    {
+      "path": "test\\data\\csv\\dirty_data.csv",
+      "result": {
+        "verdict": "fail",
+        "scope": "full_source",
+        "evidence": {
+          "coverage": "complete"
+        },
+        "checks": [
+          {
+            "code": "min_quality_score",
+            "expected": {
+              "comparison": "at_least",
+              "value": 85.0
+            },
+            "observed": 77.82,
+            "scope": "full_source",
+            "evidence": {
+              "coverage": "complete"
+            },
+            "status": "failed",
+            "message": "the overall quality score is below the required minimum"
+          }
+        ],
+        "generator": {
+          "version": "0.14.0",
+          "commit": "82f2592616812a9cf08d4f67d162e06637281d51",
+          "dirty": false
+        },
+        "source_identity": null
+      }
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,4 @@
+{
+  "min_quality_score": 80,
+  "max_quality_score_drop": 5
+}
