@@ -70,7 +70,7 @@ On the first run, when `baselines/orders.json` does not exist yet, `allow-missin
 | Input | Description | Required | Default |
 | --- | --- | --- | --- |
 | `file` | File, directory, or glob pattern to check; space- or newline-separated for several sources | Yes | - |
-| `recursive` | Pass `-r` to recurse into subdirectories | No | `false` |
+| `recursive` | Pass `-r` to recurse into subdirectories of directory sources. A `**` glob in `file` always matches across subdirectories, whatever this is set to | No | `false` |
 | `quality-threshold` | Minimum overall quality score (`0-100`), passed to `--min-quality`. Empty means no threshold unless set in `policy` | No | `''` |
 | `policy` | Path to a UTF-8 JSON policy file (`--policy`) | No | `''` |
 | `scope` | Evidence scope: `full_source` or `observed` (`--scope`) | No | `''` |
