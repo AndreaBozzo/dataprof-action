@@ -5,6 +5,7 @@ Runs with pytest and the Python standard library only, without a dataprof wheel.
 
 from __future__ import annotations
 
+import errno
 import json
 import sys
 from pathlib import Path
@@ -479,3 +480,357 @@ def test_run_action_exit_2_respects_fail_on_inconclusive_false(
     assert "verdict=inconclusive\n" in out_text
     assert "unevaluated-count=1\n" in out_text
     assert "unevaluated (evidence_incomplete: truncated)" in gh_sum.read_text(encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# Review fixes: literal glob paths, ENAMETOOLONG, cmd limit, aliasing, export
+# failure, and summary size cap
+# ---------------------------------------------------------------------------
+
+
+def test_expand_sources_keeps_existing_path_with_glob_characters_verbatim(tmp_path: Path) -> None:
+    literal = tmp_path / "data[1].csv"
+    glob_target = tmp_path / "data1.csv"
+    other = tmp_path / "other.csv"
+    literal.write_text("id\n1\n", encoding="utf-8")
+    glob_target.write_text("id\n2\n", encoding="utf-8")
+    other.write_text("id\n3\n", encoding="utf-8")
+
+    # Alone on a line: kept verbatim, never expanded to data1.csv
+    sources, unmatched = da.expand_sources(str(literal))
+    assert unmatched == []
+    assert sources == [str(literal)]
+
+    # Together with another path on the same line (whole-line probe is False)
+    multi_sources, multi_unmatched = da.expand_sources(f"{literal} {other}")
+    assert multi_unmatched == []
+    assert multi_sources == [str(literal), str(other)]
+
+    # Non-existent token with glob magic still expands via glob
+    pattern = str(tmp_path / "data[12].csv")
+    globbed, glob_unmatched = da.expand_sources(pattern)
+    assert glob_unmatched == []
+    assert globbed == [str(glob_target)]
+
+
+def test_split_file_tokens_and_expand_sources_handle_enametoolong(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    a.write_text("id\n1\n", encoding="utf-8")
+    b.write_text("id\n2\n", encoding="utf-8")
+
+    # Long space-separated line exceeding typical path-length limits
+    many = [tmp_path / f"dataset_{i:03d}.csv" for i in range(40)]
+    for path in many:
+        path.write_text("id\n1\n", encoding="utf-8")
+    long_line = " ".join(str(p) for p in many)
+    assert len(long_line) > 500
+    assert da.split_file_tokens(long_line) == [str(p) for p in many]
+
+    # Explicit OSError(ENAMETOOLONG) on both whole-line probe and per-token probe
+    real_exists = Path.exists
+
+    def flaky_exists(self: Path) -> bool:
+        text = str(self)
+        if " " in text or "overlong" in text:
+            raise OSError(errno.ENAMETOOLONG, "File name too long")
+        return real_exists(self)
+
+    monkeypatch.setattr(Path, "exists", flaky_exists)
+
+    assert da.split_file_tokens(f"{a} {b}") == [str(a), str(b)]
+    overlong_literal = str(tmp_path / ("overlong_" + "x" * 300 + ".csv"))
+    sources, unmatched = da.expand_sources(f"{a} {overlong_literal}")
+    assert unmatched == []
+    assert sources == [str(a), overlong_literal]
+
+
+@pytest.mark.parametrize(
+    "error_kind",
+    ["winerror_206", "e2big", "file_not_found_overlong"],
+)
+def test_run_action_command_line_too_long_emits_invocation_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    error_kind: str,
+) -> None:
+    if error_kind == "file_not_found_overlong":
+        # Generate enough paths so the command line exceeds 32,767 characters
+        files = [tmp_path / f"batch_source_file_name_padding_{i:04d}.csv" for i in range(450)]
+        file_input = "\n".join(str(p) for p in files)
+    else:
+        file_input = str(tmp_path / "a.csv")
+
+    calls = 0
+
+    def fake_run(cmd: list[str], **kwargs: Any) -> Any:
+        nonlocal calls
+        calls += 1
+        if error_kind == "winerror_206":
+            exc = FileNotFoundError(errno.ENOENT, "The filename or extension is too long")
+            exc.winerror = 206  # type: ignore[attr-defined]
+            raise exc
+        if error_kind == "e2big":
+            raise OSError(errno.E2BIG, "Argument list too long")
+        raise FileNotFoundError(errno.ENOENT, "No such file or directory")
+
+    monkeypatch.setattr(da.subprocess, "run", fake_run)
+
+    gh_out = tmp_path / "out.txt"
+    gh_sum = tmp_path / "summary.md"
+    export = tmp_path / "export.json"
+    rc = da.run_action(
+        env={
+            "INPUT_FILE": file_input,
+            "INPUT_QUALITY_THRESHOLD": "80",
+            "INPUT_EXPORT_JSON_PATH": str(export),
+            "GITHUB_OUTPUT": str(gh_out),
+            "GITHUB_STEP_SUMMARY": str(gh_sum),
+            "RUNNER_TEMP": str(tmp_path),
+        },
+        python_executable=sys.executable,
+    )
+
+    assert rc == 3
+    assert calls == 1  # Never splits the run
+    out_text = gh_out.read_text(encoding="utf-8")
+    assert "verdict=error\n" in out_text
+    assert "errors-count=1\n" in out_text
+    exported = json.loads(export.read_text(encoding="utf-8"))
+    assert exported["error"]["kind"] == "invocation"
+    msg = exported["error"]["message"].lower()
+    assert "too long" in msg
+    assert "directory" in msg
+    assert "invocation" in gh_sum.read_text(encoding="utf-8")
+    assert "::error::" in capsys.readouterr().err
+
+
+def test_run_action_rejects_export_path_aliasing_baseline_or_promote(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    called = False
+
+    def fail_if_called(*args: Any, **kwargs: Any) -> Any:
+        nonlocal called
+        called = True
+        raise AssertionError("subprocess.run must not be called on path aliasing")
+
+    monkeypatch.setattr(da.subprocess, "run", fail_if_called)
+
+    # Case 1: export-json-path aliases an existing baseline via relative traversal
+    base_dir = tmp_path / "baselines"
+    base_dir.mkdir()
+    baseline = base_dir / "orders.json"
+    baseline.write_text('{"keep": true}\n', encoding="utf-8")
+    aliased_export = str(base_dir / ".." / "baselines" / "orders.json")
+
+    gh_out = tmp_path / "out1.txt"
+    gh_sum = tmp_path / "sum1.md"
+    rc = da.run_action(
+        env={
+            "INPUT_FILE": "data/orders.csv",
+            "INPUT_BASELINE": str(baseline),
+            "INPUT_EXPORT_JSON_PATH": aliased_export,
+            "GITHUB_OUTPUT": str(gh_out),
+            "GITHUB_STEP_SUMMARY": str(gh_sum),
+            "RUNNER_TEMP": str(tmp_path),
+        },
+        python_executable=sys.executable,
+    )
+    assert rc == 3
+    assert not called
+    assert baseline.read_text(encoding="utf-8") == '{"keep": true}\n'
+    out1 = gh_out.read_text(encoding="utf-8")
+    assert "verdict=error\n" in out1
+    assert "errors-count=1\n" in out1
+    assert "json-export-path=\n" in out1
+    sum1 = gh_sum.read_text(encoding="utf-8")
+    assert "`argument`" in sum1
+    assert "baseline" in sum1
+
+    # Case 2: export-json-path aliases a non-existent promote path
+    promote_nonexistent = tmp_path / "future" / "promoted.json"
+    aliased_promote_export = str(tmp_path / "other" / ".." / "future" / "promoted.json")
+
+    gh_out2 = tmp_path / "out2.txt"
+    gh_sum2 = tmp_path / "sum2.md"
+    rc2 = da.run_action(
+        env={
+            "INPUT_FILE": "data/orders.csv",
+            "INPUT_PROMOTE": str(promote_nonexistent),
+            "INPUT_EXPORT_JSON_PATH": aliased_promote_export,
+            "GITHUB_OUTPUT": str(gh_out2),
+            "GITHUB_STEP_SUMMARY": str(gh_sum2),
+            "RUNNER_TEMP": str(tmp_path),
+        },
+        python_executable=sys.executable,
+    )
+    assert rc2 == 3
+    assert not called
+    assert not promote_nonexistent.exists()
+    assert "`argument`" in gh_sum2.read_text(encoding="utf-8")
+    assert "promote" in gh_sum2.read_text(encoding="utf-8")
+
+
+def test_run_action_export_write_failure_preserves_verdict_and_reports_promote(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fixture_text = (FIXTURES / "single_pass.json").read_text(encoding="utf-8")
+    promote_file = tmp_path / "promoted.json"
+    export_dir = tmp_path / "not_a_file"
+    export_dir.mkdir()
+
+    class FakeProc:
+        returncode = 0
+        stdout = fixture_text
+        stderr = "dataprof 0.14.1: pass: 1 checks, 0 violations, 0 unevaluated\n"
+
+    def fake_run(*args: Any, **kwargs: Any) -> FakeProc:
+        promote_file.write_text('{"promoted": true}\n', encoding="utf-8")
+        return FakeProc()
+
+    monkeypatch.setattr(da.subprocess, "run", fake_run)
+
+    gh_out = tmp_path / "out.txt"
+    gh_sum = tmp_path / "summary.md"
+    rc = da.run_action(
+        env={
+            "INPUT_FILE": "test/data/csv/clean_data.csv",
+            "INPUT_QUALITY_THRESHOLD": "80",
+            "INPUT_PROMOTE": str(promote_file),
+            "INPUT_EXPORT_JSON_PATH": str(export_dir),
+            "GITHUB_OUTPUT": str(gh_out),
+            "GITHUB_STEP_SUMMARY": str(gh_sum),
+            "RUNNER_TEMP": str(tmp_path),
+        },
+        python_executable=sys.executable,
+    )
+
+    assert rc == 3
+    out_text = gh_out.read_text(encoding="utf-8")
+    assert "verdict=pass\n" in out_text
+    assert "errors-count=1\n" in out_text
+    assert "json-export-path=\n" in out_text
+
+    summary_text = gh_sum.read_text(encoding="utf-8")
+    assert "## DataProf Quality Gate: `pass`" in summary_text
+    assert "**Errors**: 1" in summary_text
+    assert "Export error" in summary_text
+    assert "promoted baseline was already saved" in summary_text
+
+    stderr_text = capsys.readouterr().err
+    assert "::error::" in stderr_text
+    assert "export-json-path" in stderr_text
+    assert "promoted baseline was already saved" in stderr_text
+
+
+def test_emit_error_run_survives_export_write_failure(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    export_dir = tmp_path / "existing_dir"
+    export_dir.mkdir()
+    gh_out = tmp_path / "out.txt"
+    gh_sum = tmp_path / "summary.md"
+
+    rc = da.run_action(
+        env={
+            "INPUT_FILE": str(tmp_path / "*.parquet"),
+            "INPUT_EXPORT_JSON_PATH": str(export_dir),
+            "GITHUB_OUTPUT": str(gh_out),
+            "GITHUB_STEP_SUMMARY": str(gh_sum),
+            "RUNNER_TEMP": str(tmp_path),
+        },
+        python_executable=sys.executable,
+    )
+
+    assert rc == 3
+    out_text = gh_out.read_text(encoding="utf-8")
+    assert "verdict=error\n" in out_text
+    assert "errors-count=2\n" in out_text
+    assert "json-export-path=\n" in out_text
+    summary_text = gh_sum.read_text(encoding="utf-8")
+    assert "no files matched glob pattern" in summary_text
+    assert "Export error" in summary_text
+    stderr_text = capsys.readouterr().err
+    assert "::error::dataprof check failed (input):" in stderr_text
+    assert "::error::failed to write export-json-path" in stderr_text
+
+
+def test_render_step_summary_caps_large_multi_source_and_keeps_json_complete(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    total_sources = 3200
+    sources_payload = [
+        {
+            "path": f"data/café_batch_{i:04d}.csv",
+            "result": {
+                "verdict": "pass",
+                "scope": "full_source",
+                "evidence": {"coverage": "complete"},
+                "checks": [
+                    {
+                        "code": "min_quality_score",
+                        "status": "passed",
+                        "observed": 95.0,
+                        "expected": {"comparison": "at_least", "value": 80.0},
+                        "message": "overall quality score meets the required minimum for café",
+                    }
+                ],
+            },
+        }
+        for i in range(total_sources)
+    ]
+    big_doc: dict[str, Any] = {
+        "verdict": "pass",
+        "sources": sources_payload,
+        "skipped": [],
+    }
+    raw_json = json.dumps(big_doc) + "\n"
+
+    class FakeProc:
+        returncode = 0
+        stdout = raw_json
+        stderr = ""
+
+    monkeypatch.setattr(da.subprocess, "run", lambda *a, **kw: FakeProc())
+
+    gh_out = tmp_path / "out.txt"
+    gh_sum = tmp_path / "summary.md"
+    export = tmp_path / "complete_export.json"
+    rc = da.run_action(
+        env={
+            "INPUT_FILE": "data/",
+            "INPUT_QUALITY_THRESHOLD": "80",
+            "INPUT_EXPORT_JSON_PATH": str(export),
+            "GITHUB_OUTPUT": str(gh_out),
+            "GITHUB_STEP_SUMMARY": str(gh_sum),
+            "RUNNER_TEMP": str(tmp_path),
+        },
+        python_executable=sys.executable,
+    )
+
+    assert rc == 0
+    summary_bytes = gh_sum.read_bytes()
+    assert len(summary_bytes) <= da.MAX_STEP_SUMMARY_BYTES
+    assert len(summary_bytes) > 800 * 1024  # Substantially filled before capping
+
+    summary_text = summary_bytes.decode("utf-8")
+    assert "## DataProf Quality Gate: `pass`" in summary_text
+    assert f"- **Files analyzed**: {total_sources}" in summary_text
+    assert "### Source: `data/café_batch_0000.csv`" in summary_text
+    assert f"### Source: `data/café_batch_{total_sources - 1:04d}.csv`" not in summary_text
+
+    included_count = summary_text.count("### Source: `data/café_batch_")
+    omitted_count = total_sources - included_count
+    assert omitted_count > 0
+    assert f"{omitted_count} source(s) omitted" in summary_text
+    assert str(export) in summary_text
+    assert "`--json`" in summary_text
+
+    # Exported JSON stays complete with every source
+    exported_doc = json.loads(export.read_text(encoding="utf-8"))
+    assert len(exported_doc["sources"]) == total_sources
+    assert exported_doc["sources"][-1]["path"] == f"data/café_batch_{total_sources - 1:04d}.csv"

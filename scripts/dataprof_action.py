@@ -8,6 +8,7 @@ score, weight, or threshold.
 
 from __future__ import annotations
 
+import errno
 import glob
 import json
 import os
@@ -42,6 +43,9 @@ _STATUS_LABELS: dict[str, str] = {
     "not_evaluated": "unevaluated",
     "not_applicable": "not applicable",
 }
+
+MAX_STEP_SUMMARY_BYTES = 900 * 1024  # 900 KiB; GitHub drops summaries over 1 MiB
+_WINDOWS_CMDLINE_LIMIT = 32_767
 
 
 class ActionInputError(ValueError):
@@ -114,6 +118,41 @@ class ActionConfig:
         )
 
 
+def _path_exists_safe(path_str: str) -> bool:
+    """Return True when ``path_str`` names an existing path, treating OSError as False."""
+    try:
+        return Path(path_str).exists()
+    except OSError:
+        return False
+
+
+def _resolved_path_key(raw_path: str) -> str:
+    """Return a normalized resolved path key for aliasing comparisons."""
+    try:
+        resolved = str(Path(raw_path).resolve())
+    except OSError:
+        resolved = os.path.abspath(raw_path)
+    return os.path.normcase(resolved)
+
+
+def validate_export_path_aliasing(config: ActionConfig) -> None:
+    """Reject ``export-json-path`` when it aliases ``baseline`` or ``promote``."""
+    if not config.export_json_path:
+        return
+    export_key = _resolved_path_key(config.export_json_path)
+    conflicts: list[str] = []
+    if config.baseline and _resolved_path_key(config.baseline) == export_key:
+        conflicts.append("baseline")
+    if config.promote and _resolved_path_key(config.promote) == export_key:
+        conflicts.append("promote")
+    if conflicts:
+        targets = " and ".join(conflicts)
+        raise ActionInputError(
+            f"input 'export-json-path' ({config.export_json_path}) resolves to the same file "
+            f"as {targets}; choose a separate path so the JSON export does not overwrite it"
+        )
+
+
 def _strip_matching_quotes(token: str) -> str:
     if len(token) >= 2 and token[0] == token[-1] and token[0] in ("'", '"'):
         return token[1:-1]
@@ -132,7 +171,7 @@ def split_file_tokens(raw: str) -> list[str]:
         line = raw_line.strip()
         if not line:
             continue
-        if Path(line).exists():
+        if _path_exists_safe(line):
             tokens.append(line)
             continue
         try:
@@ -149,14 +188,18 @@ def split_file_tokens(raw: str) -> list[str]:
 def expand_sources(raw_file: str) -> tuple[list[str], list[str]]:
     """Expand glob patterns into files while passing literal paths through verbatim.
 
-    Returns ``(sources, unmatched_globs)``. Directories and literal files are
+    Returns ``(sources, unmatched_globs)``. Any token that already exists on disk
+    (including literal paths containing glob characters such as ``data[1].csv``)
+    is passed verbatim without glob expansion. Directories and literal files are
     not expanded so dataprof handles directory scanning and missing-file errors.
     """
     tokens = split_file_tokens(raw_file)
     sources: list[str] = []
     unmatched_globs: list[str] = []
     for token in tokens:
-        if glob.has_magic(token):
+        if _path_exists_safe(token):
+            sources.append(token)
+        elif glob.has_magic(token):
             matches = sorted(glob.glob(token, recursive=True))
             wants_dirs = token.endswith(("/", "\\"))
             if not wants_dirs:
@@ -172,7 +215,28 @@ def expand_sources(raw_file: str) -> tuple[list[str], list[str]]:
 
 def is_single_source_invocation(sources: Sequence[str]) -> bool:
     """Return True when dataprof will run in single-source mode."""
-    return len(sources) == 1 and not Path(sources[0]).is_dir()
+    if len(sources) != 1:
+        return False
+    try:
+        return not Path(sources[0]).is_dir()
+    except OSError:
+        return True
+
+
+def _command_line_length(cmd: Sequence[str]) -> int:
+    return sum(len(arg) + 3 for arg in cmd)
+
+
+def _is_command_too_long_error(exc: OSError, cmd: Sequence[str]) -> bool:
+    if getattr(exc, "winerror", None) == 206:
+        return True
+    if exc.errno in (errno.E2BIG, errno.ENAMETOOLONG):
+        return True
+    if "too long" in str(exc).lower():
+        return True
+    return (
+        isinstance(exc, FileNotFoundError) and _command_line_length(cmd) >= _WINDOWS_CMDLINE_LIMIT
+    )
 
 
 def build_check_command(
@@ -275,6 +339,7 @@ def parse_check_document(
     export_json_path: str = "",
     report_path: str = "",
     analysis_summary: str = "",
+    extra_errors: int = 0,
 ) -> ParsedResult:
     """Parse a ``dataprof.check --json`` document into action outputs.
 
@@ -324,6 +389,8 @@ def parse_check_document(
         skipped_count = 0
         scores = extract_report_scores(report_doc)
         effective_report_path = report_path
+
+    errors_count += extra_errors
 
     outputs: dict[str, str] = {
         "verdict": verdict,
@@ -544,6 +611,36 @@ def _extract_generator_version(doc: Mapping[str, Any]) -> str:
     return ""
 
 
+def _utf8_len(text: str) -> int:
+    return len(text.encode("utf-8"))
+
+
+def _format_omitted_sources_notice(omitted: int, export_path: str) -> str:
+    if export_path:
+        return (
+            f"\n_Summary truncated to stay under GitHub's 1 MiB limit: "
+            f"{omitted} source(s) omitted. The JSON export at `{export_path}` "
+            f"contains all sources from the `--json` document._\n"
+        )
+    return (
+        f"\n_Summary truncated to stay under GitHub's 1 MiB limit: "
+        f"{omitted} source(s) omitted. Use `export-json-path` (or the "
+        f"`--json` document) for all sources._\n"
+    )
+
+
+def _format_truncated_details_notice(export_path: str) -> str:
+    if export_path:
+        return (
+            f"\n_Summary truncated to stay under GitHub's 1 MiB limit. "
+            f"The JSON export at `{export_path}` contains the complete `--json` document._\n"
+        )
+    return (
+        "\n_Summary truncated to stay under GitHub's 1 MiB limit. "
+        "Use `export-json-path` (or the `--json` document) for complete details._\n"
+    )
+
+
 def render_step_summary(
     parsed: ParsedResult,
     doc: Mapping[str, Any],
@@ -551,8 +648,15 @@ def render_step_summary(
     file_label: str = "",
     report_doc: Mapping[str, Any] | None = None,
     installed_version: str = "",
+    export_error: str = "",
+    max_bytes: int = MAX_STEP_SUMMARY_BYTES,
 ) -> str:
-    """Render the Markdown job summary for ``GITHUB_STEP_SUMMARY``."""
+    """Render the Markdown job summary for ``GITHUB_STEP_SUMMARY``.
+
+    Caps the output at ``max_bytes`` UTF-8 bytes so GitHub does not drop the
+    job summary when a run covers many sources.
+    """
+    export_path = parsed.outputs.get("json-export-path", "")
     lines = [
         f"## DataProf Quality Gate: `{parsed.verdict}`",
         "",
@@ -568,77 +672,150 @@ def render_step_summary(
     version = installed_version or _extract_generator_version(doc)
     if version:
         lines.append(f"- **dataprof**: `{version}`")
-    if parsed.outputs.get("json-export-path"):
-        lines.append(f"- **JSON export**: `{parsed.outputs['json-export-path']}`")
+    if export_path:
+        lines.append(f"- **JSON export**: `{export_path}`")
+    if export_error:
+        lines.append(f"- **Export error**: {_md_escape(export_error)}")
+
+    header_text = "\n".join(lines) + "\n"
 
     if parsed.kind == "error":
         error = doc.get("error") if isinstance(doc.get("error"), Mapping) else {}
-        lines.extend(["", "### Error", ""])
+        err_lines = ["", "### Error", ""]
         if error.get("kind"):
-            lines.append(f"- **Kind**: `{error['kind']}`")
+            err_lines.append(f"- **Kind**: `{error['kind']}`")
         if error.get("path"):
-            lines.append(f"- **Path**: `{_md_escape(str(error['path']))}`")
+            err_lines.append(f"- **Path**: `{_md_escape(str(error['path']))}`")
         raw_msg = str(error.get("message", "Unknown error"))
         clean_msg = " ".join(part.strip() for part in raw_msg.splitlines() if part.strip())
-        lines.append(f"- **Message**: {clean_msg or 'Unknown error'}")
-        return "\n".join(lines) + "\n"
+        err_lines.append(f"- **Message**: {clean_msg or 'Unknown error'}")
+        full = header_text + "\n".join(err_lines) + "\n"
+        if _utf8_len(full) <= max_bytes:
+            return full
+        notice = _format_truncated_details_notice(export_path)
+        budget = max_bytes - _utf8_len(header_text) - _utf8_len(notice)
+        if budget <= 0:
+            return header_text + notice
+        trimmed = ("\n".join(err_lines)).encode("utf-8")[:budget].decode("utf-8", errors="ignore")
+        return header_text + trimmed.rstrip("\n") + "\n" + notice
 
     if parsed.kind == "single":
+        body_lines: list[str] = []
         if report_doc is not None:
-            lines.append("")
-            lines.extend(_render_scores_section(parsed.scores))
+            body_lines.append("")
+            body_lines.extend(_render_scores_section(parsed.scores))
         source_path = file_label or parsed.outputs.get("file-path", "") or "(source)"
-        lines.append("")
-        lines.extend(_render_source_section(source_path, doc))
-        return "\n".join(lines) + "\n"
+        body_lines.append("")
+        body_lines.extend(_render_source_section(source_path, doc))
+        full = header_text + "\n".join(body_lines) + "\n"
+        if _utf8_len(full) <= max_bytes:
+            return full
+        notice = _format_truncated_details_notice(export_path)
+        notice_bytes = _utf8_len(notice)
+        parts = [header_text]
+        used = _utf8_len(header_text)
+        for line in body_lines:
+            chunk = line + "\n"
+            chunk_bytes = _utf8_len(chunk)
+            if used + chunk_bytes + notice_bytes <= max_bytes:
+                parts.append(chunk)
+                used += chunk_bytes
+            else:
+                break
+        parts.append(notice)
+        return "".join(parts)
 
     # Multi-source document
+    source_blocks: list[str] = []
     error_entries: list[tuple[str, Mapping[str, Any]]] = []
     for entry in doc.get("sources") or []:
         if not isinstance(entry, Mapping):
             continue
         path = str(entry.get("path", "(unknown)"))
         if isinstance(entry.get("result"), Mapping):
-            lines.append("")
-            lines.extend(_render_source_section(path, entry["result"]))
+            source_blocks.append(
+                "\n" + "\n".join(_render_source_section(path, entry["result"])) + "\n"
+            )
         elif isinstance(entry.get("error"), Mapping):
             error_entries.append((path, entry["error"]))
 
+    trailing_blocks: list[str] = []
     if error_entries:
-        lines.extend(
-            [
-                "",
-                "### Source Errors",
-                "",
-                "| Path | Kind | Message |",
-                "| --- | --- | --- |",
-            ]
-        )
+        err_table = [
+            "",
+            "### Source Errors",
+            "",
+            "| Path | Kind | Message |",
+            "| --- | --- | --- |",
+        ]
         for path, err in error_entries:
             kind = _md_escape(str(err.get("kind", "error")))
             msg = _md_escape(str(err.get("message", "")))
-            lines.append(f"| `{_md_escape(path)}` | `{kind}` | {msg} |")
+            err_table.append(f"| `{_md_escape(path)}` | `{kind}` | {msg} |")
+        trailing_blocks.append("\n".join(err_table) + "\n")
 
     skipped = doc.get("skipped") or []
     if skipped:
-        lines.extend(
-            [
-                "",
-                "### Skipped Files",
-                "",
-                "| Path | Reason |",
-                "| --- | --- |",
-            ]
-        )
+        skip_table = [
+            "",
+            "### Skipped Files",
+            "",
+            "| Path | Reason |",
+            "| --- | --- |",
+        ]
         for item in skipped:
             if not isinstance(item, Mapping):
                 continue
             path = _md_escape(str(item.get("path", "")))
             raw_reason = str(item.get("reason", ""))
             reason = _md_escape(SKIP_REASON_LABELS.get(raw_reason, raw_reason))
-            lines.append(f"| `{path}` | {reason} |")
+            skip_table.append(f"| `{path}` | {reason} |")
+        trailing_blocks.append("\n".join(skip_table) + "\n")
 
-    return "\n".join(lines) + "\n"
+    full = header_text + "".join(source_blocks) + "".join(trailing_blocks)
+    if _utf8_len(full) <= max_bytes:
+        return full
+
+    parts = [header_text]
+    used = _utf8_len(header_text)
+    omitted_sources = 0
+    total_sources = len(source_blocks)
+    for idx, block in enumerate(source_blocks):
+        remaining_after = total_sources - (idx + 1)
+        if remaining_after > 0:
+            reserve = _utf8_len(_format_omitted_sources_notice(remaining_after, export_path))
+        elif trailing_blocks:
+            reserve = _utf8_len(_format_truncated_details_notice(export_path))
+        else:
+            reserve = 0
+        block_bytes = _utf8_len(block)
+        if used + block_bytes + reserve <= max_bytes:
+            parts.append(block)
+            used += block_bytes
+        else:
+            omitted_sources = total_sources - idx
+            break
+
+    if omitted_sources > 0:
+        parts.append(_format_omitted_sources_notice(omitted_sources, export_path))
+        return "".join(parts)
+
+    details_notice = _format_truncated_details_notice(export_path)
+    details_notice_bytes = _utf8_len(details_notice)
+    truncated_trailing = False
+    for idx, block in enumerate(trailing_blocks):
+        reserve = details_notice_bytes if idx < len(trailing_blocks) - 1 else 0
+        block_bytes = _utf8_len(block)
+        if used + block_bytes + reserve <= max_bytes:
+            parts.append(block)
+            used += block_bytes
+        else:
+            truncated_trailing = True
+            break
+
+    if truncated_trailing:
+        parts.append(details_notice)
+    return "".join(parts)
 
 
 def build_text_summary(parsed: ParsedResult, doc: Mapping[str, Any], stderr: str) -> str:
@@ -693,28 +870,38 @@ def _emit_error_run(
     doc: dict[str, Any] = {"error": {"kind": kind, "message": message}}
     raw_json = json.dumps(doc, indent=2) + "\n"
     written_export = ""
+    export_error = ""
     if export_json_path:
-        _export_json(Path(export_json_path), raw_json)
-        written_export = export_json_path
+        try:
+            _export_json(Path(export_json_path), raw_json)
+            written_export = export_json_path
+        except OSError as exc:
+            export_error = f"failed to write export-json-path '{export_json_path}': {exc}"
 
     analysis_summary = f"error ({kind}): {message}"
+    if export_error:
+        analysis_summary = f"{analysis_summary}; {export_error}"
     parsed = parse_check_document(
         doc,
         file_input=file_input,
         export_json_path=written_export,
         analysis_summary=analysis_summary,
+        extra_errors=1 if export_error else 0,
     )
     summary_md = render_step_summary(
         parsed,
         doc,
         file_label=file_input,
         installed_version=installed_version,
+        export_error=export_error,
     )
     if env.get("GITHUB_OUTPUT"):
         write_github_output(Path(env["GITHUB_OUTPUT"]), parsed.outputs)
     if env.get("GITHUB_STEP_SUMMARY"):
         write_step_summary(Path(env["GITHUB_STEP_SUMMARY"]), summary_md)
     print(f"::error::dataprof check failed ({kind}): {message}", file=sys.stderr)
+    if export_error:
+        print(f"::error::{export_error}", file=sys.stderr)
     return 3
 
 
@@ -737,6 +924,18 @@ def run_action(
             export_json_path=active_env.get("INPUT_EXPORT_JSON_PATH", "").strip(),
             env=active_env,
             installed_version=active_env.get("INPUT_DATAPROF_VERSION", "").strip(),
+        )
+
+    try:
+        validate_export_path_aliasing(config)
+    except ActionInputError as exc:
+        return _emit_error_run(
+            kind="argument",
+            message=str(exc),
+            file_input=config.file,
+            export_json_path="",
+            env=active_env,
+            installed_version=config.dataprof_version,
         )
 
     try:
@@ -785,7 +984,25 @@ def run_action(
         python_executable=py,
         report_path=report_path,
     )
-    proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    except OSError as exc:
+        if _is_command_too_long_error(exc, cmd):
+            message = (
+                f"source list is too long for the operating system command-line limit "
+                f"({len(sources)} source(s)); pass a directory instead of a glob or "
+                f"long file list ({exc})"
+            )
+        else:
+            message = f"failed to launch dataprof.check: {exc}"
+        return _emit_error_run(
+            kind="invocation",
+            message=message,
+            file_input=config.file,
+            export_json_path=config.export_json_path,
+            env=active_env,
+            installed_version=config.dataprof_version,
+        )
 
     if proc.stderr:
         sys.stderr.write(proc.stderr)
@@ -827,9 +1044,18 @@ def run_action(
         )
 
     written_export = ""
+    export_error = ""
     if config.export_json_path:
-        _export_json(Path(config.export_json_path), proc.stdout)
-        written_export = config.export_json_path
+        try:
+            _export_json(Path(config.export_json_path), proc.stdout)
+            written_export = config.export_json_path
+        except OSError as exc:
+            export_error = f"failed to write export-json-path '{config.export_json_path}': {exc}"
+            if config.promote and proc.returncode == 0 and _path_exists_safe(config.promote):
+                export_error += (
+                    f" (promoted baseline was already saved to '{config.promote}' "
+                    f"and was not rolled back)"
+                )
 
     report_doc: Mapping[str, Any] | None = None
     effective_report_path = ""
@@ -837,14 +1063,18 @@ def run_action(
         report_doc = json.loads(report_path.read_text(encoding="utf-8"))
         effective_report_path = str(report_path)
 
+    extra_errors = 1 if export_error else 0
     provisional = parse_check_document(
         doc,
         report_doc=report_doc,
         file_input=config.file,
         export_json_path=written_export,
         report_path=effective_report_path,
+        extra_errors=extra_errors,
     )
     analysis_summary = build_text_summary(provisional, doc, proc.stderr)
+    if export_error:
+        analysis_summary = f"{analysis_summary}; {export_error}"
     parsed = parse_check_document(
         doc,
         report_doc=report_doc,
@@ -852,6 +1082,7 @@ def run_action(
         export_json_path=written_export,
         report_path=effective_report_path,
         analysis_summary=analysis_summary,
+        extra_errors=extra_errors,
     )
 
     file_label = sources[0] if single else config.file
@@ -861,12 +1092,17 @@ def run_action(
         file_label=file_label,
         report_doc=report_doc,
         installed_version=config.dataprof_version,
+        export_error=export_error,
     )
 
     if active_env.get("GITHUB_OUTPUT"):
         write_github_output(Path(active_env["GITHUB_OUTPUT"]), parsed.outputs)
     if active_env.get("GITHUB_STEP_SUMMARY"):
         write_step_summary(Path(active_env["GITHUB_STEP_SUMMARY"]), summary_md)
+
+    if export_error:
+        print(f"::error::{export_error}", file=sys.stderr)
+        return 3
 
     step_exit = determine_step_exit_code(
         proc.returncode,

@@ -4,7 +4,7 @@ A GitHub composite action that profiles CSV, JSON, JSONL, and Parquet files and 
 
 ## Requirements
 
-- **Minimum dataprof version**: `0.15.0` (installed as a Python wheel into an isolated virtual environment under `$RUNNER_TEMP`; no Rust toolchain is installed and nothing is built at job runtime).
+- **Minimum dataprof version**: `0.14.1` (installed as a Python wheel into an isolated virtual environment under `$RUNNER_TEMP`; no Rust toolchain is installed and nothing is built at job runtime).
 - **Python**: CPython 3.11 or newer on the runner, or configured via the optional `python-version` input.
 - **Runners**: `ubuntu-latest`, `macos-latest`, and `windows-latest`.
 
@@ -53,7 +53,16 @@ Passing a directory, a glob pattern matching multiple files, or multiple space- 
 ### First-Run Baseline with Promotion
 
 ```yaml
+- name: Restore saved baseline
+  uses: actions/cache/restore@v4
+  with:
+    path: baselines/orders.json
+    key: dataprof-baseline-orders-${{ github.run_id }}-${{ github.run_attempt }}
+    restore-keys: |
+      dataprof-baseline-orders-
+
 - name: Check against baseline and promote on pass
+  id: gate
   uses: AndreaBozzo/dataprof-action@v2
   with:
     file: data/orders.csv
@@ -61,9 +70,16 @@ Passing a directory, a glob pattern matching multiple files, or multiple space- 
     baseline: baselines/orders.json
     allow-missing-baseline: 'true'
     promote: baselines/orders.json
+
+- name: Save promoted baseline
+  if: ${{ steps.gate.outputs.verdict == 'pass' && hashFiles('baselines/orders.json') != '' }}
+  uses: actions/cache/save@v4
+  with:
+    path: baselines/orders.json
+    key: dataprof-baseline-orders-${{ github.run_id }}-${{ github.run_attempt }}
 ```
 
-On the first run, when `baselines/orders.json` does not exist yet, `allow-missing-baseline` marks change rules as not applicable so absolute rules decide the verdict; on a pass, `promote` saves the profile atomically to `baselines/orders.json` for subsequent runs.
+Each GitHub-hosted job starts on a fresh runner, so files written by `promote` disappear when the job ends. Without restoring the latest cached baseline before the check and saving the promoted file after a pass, every workflow run would take the missing-baseline path and skip change rules.
 
 ## Inputs
 
@@ -82,7 +98,7 @@ On the first run, when `baselines/orders.json` does not exist yet, `allow-missin
 | `fail-on-issues` | Fail the step on exit code `1` (verdict `fail`) | No | `true` |
 | `fail-on-inconclusive` | Fail the step on exit code `2` (verdict `inconclusive`). Exit code `3` always fails | No | `true` |
 | `export-json-path` | Path to write the raw `--json` document from `dataprof.check` | No | `''` |
-| `dataprof-version` | Version of `dataprof` to install from PyPI (`0.15.0`, `latest`, or an exact pre-release such as `0.15.0rc1`) | No | `0.15.0` |
+| `dataprof-version` | Version of `dataprof` to install from PyPI (minimum `0.14.1`, `latest`, or an exact pre-release) | No | `0.14.1` |
 | `python-version` | Optional Python version (3.11 or newer) to set up via `actions/setup-python` | No | `''` |
 
 ## Outputs
@@ -121,13 +137,13 @@ Absent values are empty strings, never `"0"`. Score outputs (`quality-score` and
 
 ## Migrating from v1
 
-`v2` is a breaking release built on `dataprof` 0.15.0 (`python -m dataprof.check`). `v1` remains available at its existing tag for workflows that pin it.
+`v2` is a breaking release built on `dataprof` 0.14.1 or newer (`python -m dataprof.check`). `v1` remains available at its existing tag for workflows that pin it.
 
 ### Runtime and Installation
 
 - `v2` installs the `dataprof` Python wheel into a virtual environment under `$RUNNER_TEMP` instead of installing Rust and running `cargo install dataprof`.
-- Requires `dataprof >= 0.15.0` and Python `>= 3.11`.
-- Default `dataprof-version` changed from `latest` to `0.15.0`.
+- Requires `dataprof >= 0.14.1` and Python `>= 3.11`.
+- Default `dataprof-version` changed from `latest` to `0.14.1`.
 
 ### Input Changes
 

@@ -72,9 +72,9 @@ inputs:
     default: ''
 
   dataprof-version:
-    description: 'Version of dataprof to install from PyPI (default 0.15.0; supports latest and exact pre-releases such as 0.15.0rc1)'
+    description: 'Version of dataprof to install from PyPI (minimum 0.14.1, default 0.14.1; supports latest and exact pre-releases)'
     required: false
-    default: '0.15.0'
+    default: '0.14.1'
 
   python-version:
     description: 'Optional Python version to install with actions/setup-python (must be 3.11 or newer)'
@@ -196,12 +196,12 @@ runs:
           exit 1
         fi
 
-        REQUESTED="${INPUT_DATAPROF_VERSION:-0.15.0}"
+        REQUESTED="${INPUT_DATAPROF_VERSION:-0.14.1}"
         if [ "$REQUESTED" = "latest" ]; then
           RESOLVED_VERSION="$("$BASE_PYTHON" -c '
-        import json, urllib.request
+        import json, sys, urllib.request
         with urllib.request.urlopen("https://pypi.org/pypi/dataprof/json", timeout=30) as resp:
-            print(json.load(resp)["info"]["version"])
+            sys.stdout.write(json.load(resp)["info"]["version"])
         ')"
         else
           RESOLVED_VERSION="$REQUESTED"
@@ -213,8 +213,10 @@ runs:
         fi
 
         SAFE_VERSION="${RESOLVED_VERSION//[^A-Za-z0-9._+-]/_}"
+        PY_TAG="$("$BASE_PYTHON" -c 'import sys; sys.stdout.write(f"{sys.implementation.name}-{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")')"
+        SAFE_PY_TAG="${PY_TAG//[^A-Za-z0-9._+-]/_}"
         TEMP_ROOT="${RUNNER_TEMP:-/tmp}"
-        VENV_DIR="${TEMP_ROOT}/dataprof-action-venv-${SAFE_VERSION}"
+        VENV_DIR="${TEMP_ROOT}/dataprof-action-venv-${SAFE_VERSION}-${SAFE_PY_TAG}"
 
         find_venv_python() {
           if [ -x "$VENV_DIR/Scripts/python.exe" ]; then
